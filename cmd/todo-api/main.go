@@ -15,7 +15,7 @@ func main() {
 
 	h := transport.NewHandler(svc)
 
-	http.HandleFunc("/todos", h.GetTodos) // Регистрируем обработчик для пути /todos.
+	http.HandleFunc("/todos", h.Todos) // роут Регистрируем обработчик для пути /todos.
 
 	// Запускаем HTTP-сервер на порту 8080.
 	log.Println("API server started: http://localhost:8080")
