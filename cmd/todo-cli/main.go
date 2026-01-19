@@ -120,7 +120,23 @@ func main() {
 			return
 		}
 		fmt.Printf("task #%d deleted\n", t.ID)
-
+	case "update":
+		if len(os.Args) < 4 {
+			fmt.Println("usage: update ID \"new title\"")
+			return
+		}
+		id, err := strconv.Atoi(os.Args[2])
+		if err != nil {
+			fmt.Println("invalid ID:", os.Args[2])
+			return
+		}
+		newTitle := strings.Join(os.Args[3:], " ")
+		t, err := svc.Update(id, newTitle)
+		if err != nil {
+			fmt.Println("error:", err)
+			return
+		}
+		fmt.Printf("task #%d updated to: %s\n", t.ID, t.Title)
 	default:
 		fmt.Println("unknown command:", cmd)
 		printhelp()

@@ -154,3 +154,37 @@ func (s *TaskService) GetByID(id int) (model.Task, error) {
 	}
 	return model.Task{}, model.ErrNotFound
 }
+
+func (s *TaskService) Update(id int, title string) (model.Task, error) {
+	if id <= 0 {
+		return model.Task{}, model.ErrInvalidID
+	}
+
+	title = strings.TrimSpace(title)
+
+	if title == "" {
+		return model.Task{}, model.ErrEmptyTitle
+	}
+
+	task, err := s.GetByID(id)
+	if err != nil {
+		return model.Task{}, err
+	}
+
+	task.Title = title
+	tasks, err := s.store.Load() // загрузка всех задач
+	if err != nil {
+		return model.Task{}, err
+	}
+	for i, t := range tasks {
+		if t.ID == id {
+			tasks[i] = task
+			break
+		}
+	}
+	err = s.store.Save(tasks) // сохранение обновленного списка задач
+	if err != nil {
+		return model.Task{}, err
+	}
+	return task, nil
+}

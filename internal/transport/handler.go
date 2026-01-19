@@ -36,6 +36,12 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) {
 		h.PostTodo(w, r)
 	case http.MethodDelete:
 		h.DeleteTodo(w, r)
+	case http.MethodPut:
+		if strings.HasPrefix(r.URL.Path, "/todos/") {
+			h.UpdTodo(w, r)
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
+		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -225,4 +231,53 @@ func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
+}
+
+type UpdateTodoRequest struct {
+	Title string `json:"title"`
+}
+
+func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на обновление задачи.
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idStr := strings.TrimPrefix(r.URL.Path, "/todos/")
+	if idStr == "" {
+		http.Error(w, "Missing id path", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+		return
+	}
+	var req UpdateTodoRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body(json)", http.StatusBadRequest)
+		return
+	}
+
+	task, err := h.svc.Update(id, req.Title)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		} else if errors.Is(err, model.ErrInvalidID) {
+			http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, "Failed to update task", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(task); err != nil {
+		http.Error(w, "Failed to encode task", http.StatusInternalServerError) // ошибка 500
+		return
+	}
 }
