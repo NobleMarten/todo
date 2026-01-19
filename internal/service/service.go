@@ -138,3 +138,19 @@ func (s *TaskService) Delete(id int) (model.Task, error) {
 	}
 	return model.Task{}, model.ErrNotFound
 }
+
+func (s *TaskService) GetByID(id int) (model.Task, error) {
+	if id <= 0 {
+		return model.Task{}, model.ErrInvalidID
+	}
+	tasks, err := s.store.Load()
+	if err != nil {
+		return model.Task{}, err
+	}
+	for _, t := range tasks {
+		if t.ID == id {
+			return t, nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}

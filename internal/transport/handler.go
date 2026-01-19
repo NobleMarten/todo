@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"todo/internal/model"
 	"todo/internal/service"
 )
@@ -24,7 +25,13 @@ func NewHandler(svc *service.TaskService) *Handler {
 func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		h.GetTodos(w, r)
+		if strings.HasPrefix(r.URL.Path, "/todos/") {
+			h.Getid(w, r)
+		} else if r.URL.Path == "/todos" {
+			h.GetTodos(w, r)
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
+		}
 	case http.MethodPost:
 		h.PostTodo(w, r)
 	case http.MethodDelete:
@@ -51,6 +58,45 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 
 	if err := json.NewEncoder(w).Encode(tasks); err != nil { // Кодируем задачи в JSON и записываем их в ответ.
 		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) Getid(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на получение задачи по ID.
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // ошибка 405
+		return
+	}
+
+	path := r.URL.Path
+	idStr := strings.TrimPrefix(path, "/todos/")
+	if idStr == "" {
+		http.Error(w, "Missing id path", http.StatusBadRequest) // ошибка 400
+		return
+	}
+	idInt, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest) // ошибка 400
+		return
+	}
+
+	task, err := h.svc.GetByID(idInt)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			http.Error(w, "Task not found", http.StatusNotFound) // ошибка 404
+			return
+		} else if errors.Is(err, model.ErrInvalidID) {
+			http.Error(w, "Invalid id parameter", http.StatusBadRequest) // ошибка 400
+			return
+		}
+		http.Error(w, "Failed to get task", http.StatusInternalServerError) // ошибка 500
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")      // Устанавливаем заголовок Content-Type в ответе.
+	if err := json.NewEncoder(w).Encode(task); err != nil { // Кодируем задачи в JSON и записываем их в ответ.
+		http.Error(w, "Failed to encode task", http.StatusInternalServerError)
 		return
 	}
 }
