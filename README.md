@@ -1,4 +1,4 @@
-### TODO (Go)
+# TODO (Go)
 
 Небольшой учебный проект на Go: TODO с хранением данных в json файле 
 (в дальнейшем в postgresql)
@@ -7,27 +7,27 @@
 
 Запуск:
 
-#CLI
+## CLI
 ```
 go run ./cmd/todo-cli -- help
 go run ./cmd/todo-cli -- list
 go run ./cmd/todo-cli -- add "купить молоко"
 ```
 
-#API
+## API
 ```
 go run ./cmd/todo-api
 ```
 
 Server: http;//localhost:8080
 
-##Получить список задач
+## Получить список задач
   GET /todos
 
   Response: 200 OK
   Body: JSON-массив задач
 
-##Получить задачу по ID
+## Получить задачу по ID
   GET /todos/{id}
 
   Response:
@@ -35,16 +35,18 @@ Server: http;//localhost:8080
 	•	400 Bad Request (id не число или <= 0)
 	•	404 Not Found (нет такой задачи)
 
-##Создать задачу
+## Создать задачу
   POST /todos
 
   Body (JSON):
-  ```
-  {"title": "разобрать документы"}
+  ```json
+	{
+	"title": "разобрать документы"
+	}
   ```
   Response: 201 Created + созданная задача
 
-##Изменить done/undone
+## Изменить done/undone
   PUT /todos/done?id={id}&done={true|false}
 
   Пример: /todos/done?id=2&done=true
@@ -54,7 +56,7 @@ Server: http;//localhost:8080
   	•	400 Bad Request
   	•	404 Not Found
     
-##Удалить задачу
+## Удалить задачу
   DELETE /todos?id={id}
   
   Пример: /todos?id=2
@@ -64,7 +66,7 @@ Server: http;//localhost:8080
   	•	400 Bad Request
   	•	404 Not Found
 
-##Модель Todo
+## Модель Todo
   
   Поля (пример):
   	•	id (int)
