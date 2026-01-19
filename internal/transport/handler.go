@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 	"todo/internal/model"
 	"todo/internal/service"
 )
@@ -26,6 +27,8 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) {
 		h.GetTodos(w, r)
 	case http.MethodPost:
 		h.PostTodo(w, r)
+	case http.MethodDelete:
+		h.DeleteTodo(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -71,7 +74,6 @@ func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body(json)", http.StatusBadRequest)
 		return
 	}
-	log.Printf("decoded title=%q\n", req.Title)
 
 	task, err := h.svc.Add(req.Title)
 	if err != nil {
@@ -90,4 +92,91 @@ func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode task", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на удаление задачи.
+
+	if r.Method != http.MethodDelete {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Missing id parameter", http.StatusBadRequest)
+		return
+	}
+
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+		return
+	}
+
+	_, err = h.svc.Delete(id)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			http.Error(w, "Task not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Failed to delete task", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content
+
+}
+
+func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на установку задачи как выполненной.
+	if r.Method != http.MethodPut {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) //ошибка 405
+		return
+	}
+
+	idStr := r.URL.Query().Get("id")
+	if idStr == "" {
+		http.Error(w, "Missing id parameter", http.StatusBadRequest) //ошибка 400
+		return
+	}
+
+	doneStr := r.URL.Query().Get("done")
+	if doneStr == "" {
+		http.Error(w, "Missing done parameter", http.StatusBadRequest) //ошибка 400
+		return
+	}
+
+	// распарсим id и done
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest) //ошибка 400
+		return
+	}
+
+	done, err := strconv.ParseBool(doneStr)
+	if err != nil {
+		http.Error(w, "Invalid done parameter", http.StatusBadRequest) //ошибка 400
+		return
+	}
+
+	if done {
+		_, err = h.svc.Done(id)
+	} else {
+		_, err = h.svc.Undone(id)
+	}
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			http.Error(w, "Task not found", http.StatusNotFound) //ошибка 404
+			return
+		} else if errors.Is(err, model.ErrAlreadyDone) || errors.Is(err, model.ErrNotDone) {
+			http.Error(w, err.Error(), http.StatusBadRequest) //ошибка 400
+			return
+		} else {
+			http.Error(w, "Failed to update task status", http.StatusInternalServerError) //ошибка 500
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
