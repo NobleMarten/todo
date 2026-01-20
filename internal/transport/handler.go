@@ -62,16 +62,16 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 			h.FilterDate(w, r)
 		} else if r.URL.Query().Has("done") {
 			h.FilterDone(w, r)
+		} else {
+			w.Header().Set("Content-Type", "application/json") // Устанавливаем заголовок Content-Type в ответе.
+
+			if err := json.NewEncoder(w).Encode(tasks); err != nil { // Кодируем задачи в JSON и записываем их в ответ.
+				http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
+				return
+			}
 		}
 	} else {
-		http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
-	}
-
-	w.Header().Set("Content-Type", "application/json") // Устанавливаем заголовок Content-Type в ответе.
-
-	if err := json.NewEncoder(w).Encode(tasks); err != nil { // Кодируем задачи в JSON и записываем их в ответ.
-		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
-		return
+		http.Error(w, "Not found", http.StatusNotFound)
 	}
 }
 
