@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"todo/internal/model"
 	"todo/internal/service"
 )
@@ -22,16 +23,10 @@ func NewHandler(svc *service.TaskService) *Handler {
 	return &Handler{svc: svc} // *Handler означает, что функция возвращает указатель на Handler.
 }
 
-func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роутинг) Метод Todos обрабатывает HTTP-запросы, связанные с задачами.
 	switch r.Method {
 	case http.MethodGet:
-		if strings.HasPrefix(r.URL.Path, "/todos/") {
-			h.Getid(w, r)
-		} else if r.URL.Path == "/todos" {
-			h.GetTodos(w, r)
-		} else {
-			http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
-		}
+		h.GetTodos(w, r)
 	case http.MethodPost:
 		h.PostTodo(w, r)
 	case http.MethodDelete:
@@ -58,6 +53,18 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "Failed to load tasks", http.StatusInternalServerError)
 		return
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/todos/") {
+		h.Getid(w, r)
+	} else if r.URL.Path == "/todos" {
+		if r.URL.Query().Has("from") && r.URL.Query().Has("to") {
+			h.FilterDate(w, r)
+		} else if r.URL.Query().Has("done") {
+			h.FilterDone(w, r)
+		}
+	} else {
+		http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
 	}
 
 	w.Header().Set("Content-Type", "application/json") // Устанавливаем заголовок Content-Type в ответе.
@@ -154,7 +161,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Query().Get("id")
+	idStr := strings.TrimPrefix(r.URL.Path, "/todos/")
 	if idStr == "" {
 		http.Error(w, "Missing id parameter", http.StatusBadRequest)
 		return
@@ -278,6 +285,73 @@ func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(task); err != nil {
 		http.Error(w, "Failed to encode task", http.StatusInternalServerError) // ошибка 500
+		return
+	}
+}
+
+func (h *Handler) FilterDate(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на фильтрацию задач по create_date.
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	fromStr := r.URL.Query().Get("from")
+	toStr := r.URL.Query().Get("to")
+	if fromStr == "" || toStr == "" {
+		http.Error(w, "Missing from or to parameter", http.StatusBadRequest)
+		return
+	}
+	from, err := time.Parse("2006-01-02", fromStr)
+	if err != nil {
+		http.Error(w, "Invalid from parameter", http.StatusBadRequest)
+		return
+	}
+	to, err := time.Parse("2006-01-02", toStr)
+	if err != nil {
+		http.Error(w, "Invalid to parameter", http.StatusBadRequest)
+		return
+	}
+	tasks, err := h.svc.FilterByDate(from, to)
+	if err != nil {
+		http.Error(w, "Failed to filter tasks", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(tasks); err != nil {
+		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
+		return
+	}
+}
+
+func (h *Handler) FilterDone(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на фильтрацию задач по create_date.
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // ошибка 405
+		return
+	}
+
+	doneStr := r.URL.Query().Get("done")
+	if doneStr == "" {
+		http.Error(w, "Missing done parameter", http.StatusBadRequest) // ошибка 400
+		return
+	}
+
+	done, err := strconv.ParseBool(doneStr)
+	if err != nil {
+		http.Error(w, "Invalid done parameter", http.StatusBadRequest) // ошибка 400
+		return
+	}
+
+	tasks, err := h.svc.FilterByDone(done)
+	if err != nil {
+		http.Error(w, "Failed to filter tasks", http.StatusInternalServerError) // ошибка 500
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(tasks); err != nil {
+		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError) // ошибка 500
 		return
 	}
 }

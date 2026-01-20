@@ -188,3 +188,36 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 	}
 	return task, nil
 }
+
+func (s *TaskService) FilterByDate(from, to time.Time) ([]model.Task, error) {
+	tasks, err := s.store.Load() // загрузка всех задач
+	if err != nil {
+		return nil, err
+	}
+
+	tonext := to.Add(24 * time.Hour) // чтобы включить задачи, созданные в день "to"
+
+	var filteredTasks []model.Task
+	for _, t := range tasks {
+		if (t.CreatedAt.After(from) || t.CreatedAt.Equal(from)) && (t.CreatedAt.Before(tonext) || t.CreatedAt.Equal(tonext)) { // проверка диапазона, включая границы
+			filteredTasks = append(filteredTasks, t)
+		}
+	}
+	return filteredTasks, nil
+}
+
+func (s *TaskService) FilterByDone(done bool) ([]model.Task, error) {
+	tasks, err := s.store.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	var filteredTasks []model.Task
+
+	for _, t := range tasks {
+		if t.Done == done {
+			filteredTasks = append(filteredTasks, t)
+		}
+	}
+	return filteredTasks, nil
+}
