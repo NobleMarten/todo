@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 	"todo/internal/model"
 	"todo/internal/service"
 )
@@ -58,67 +57,55 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 		h.Getid(w, r)
 		return
 	} else if r.URL.Path == "/todos" {
-		if r.URL.Query().Has("from") && r.URL.Query().Has("to") {
-			fromStr := r.URL.Query().Get("from")
-			toStr := r.URL.Query().Get("to")
-
-			from, err := time.Parse("2006-01-02", fromStr)
-			if err != nil {
-				http.Error(w, "Invalid from parameter", http.StatusBadRequest)
-				return
-			}
-
-			to, err := time.Parse("2006-01-02", toStr)
-			if err != nil {
-				http.Error(w, "Invalid to parameter", http.StatusBadRequest)
-				return
-			}
-
+		// Parse query parameters for filtering, sorting, and pagination
+		from, to, ok, err := ParseDate(r)
+		if err != nil {
+			http.Error(w, "Invalid from or to parameter", http.StatusBadRequest) // ошибка 400
+			return
+		}
+		if ok {
 			tasks, err = h.svc.FilterByDate(tasks, from, to)
 
 			if err != nil {
-				http.Error(w, "Failed to filter tasks", http.StatusInternalServerError)
+				http.Error(w, "Failed to filter tasks", http.StatusInternalServerError) // ошибка 500
 				return
 			}
-
 		}
-		if r.URL.Query().Has("done") {
-			doneStr := r.URL.Query().Get("done")
-			if doneStr == "" {
-				http.Error(w, "Missing done parameter", http.StatusBadRequest) // ошибка 400
-				return
-			}
 
-			done, err := strconv.ParseBool(doneStr)
-			if err != nil {
-				http.Error(w, "Invalid done parameter", http.StatusBadRequest) // ошибка 400
-				return
-			}
-
+		done, ok, err := ParseDone(r)
+		if err != nil {
+			http.Error(w, "Invalid done parameter", http.StatusBadRequest) // ошибка 400
+			return
+		}
+		if ok {
 			tasks, err = h.svc.FilterByDone(tasks, done)
 
 			if err != nil {
-				http.Error(w, "Failed to filter tasks", http.StatusInternalServerError)
+				http.Error(w, "Failed to filter tasks", http.StatusInternalServerError) // ошибка 500
 				return
 			}
 
 		}
 
-		if r.URL.Query().Has("limit") && r.URL.Query().Has("offset") {
-
-			limitStr := r.URL.Query().Get("limit")
-			offsetStr := r.URL.Query().Get("offset")
-
-			limit, err := strconv.Atoi(limitStr)
+		sortBy, order, ok, err := SortParse(r)
+		if err != nil {
+			http.Error(w, "Invalid sort or order parameter", http.StatusBadRequest) // ошибка 400
+			return
+		}
+		if ok {
+			tasks, err = h.svc.SortTasks(tasks, sortBy, order)
 			if err != nil {
-				http.Error(w, "Invalid limit parameter", http.StatusBadRequest)
+				http.Error(w, "Failed to sort tasks", http.StatusInternalServerError) // ошибка 500
 				return
 			}
-			offset, err := strconv.Atoi(offsetStr)
-			if err != nil {
-				http.Error(w, "Invalid offset parameter", http.StatusBadRequest)
-				return
-			}
+		}
+
+		limit, offset, ok, err := ParsePaginate(r)
+		if err != nil {
+			http.Error(w, "Invalid limit or offset parameter", http.StatusBadRequest) // ошибка 400
+			return
+		}
+		if ok {
 			tasks, err = h.svc.Paginate(tasks, limit, offset)
 			if err != nil {
 				http.Error(w, "Failed to paginate tasks", http.StatusInternalServerError)
@@ -132,7 +119,6 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
 			return
 		}
-
 	} else {
 		http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
 		return

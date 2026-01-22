@@ -35,6 +35,22 @@ Server: http;//localhost:8080
 	•	400 Bad Request (id не число или <= 0)
 	•	404 Not Found (нет такой задачи)
 
+## Фильтр по дате и done
+  GET todos?from=2026-01-18&to=2026-01-22&done=false
+
+  Response:
+  •	200 OK + JSON-массив задач, соответствующих фильтрам
+  •	400 Bad Request (неверный формат даты)
+  •	404 Not Found (нет задач, соответствующих фильтрам)
+
+## Пагинация
+  GET /todos?page={page}&limit={limit}
+
+  Response:
+  •	200 OK + JSON-массив задач (с учетом пагинации)
+  •	400 Bad Request (неверные параметры)
+  •	404 Not Found (нет задач на указанной странице)
+
 ## Создать задачу
   POST /todos
 

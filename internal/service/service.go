@@ -1,6 +1,7 @@
 package service
 
 import (
+	"sort"
 	"strings"
 	"time"
 	"todo/internal/model"
@@ -221,4 +222,33 @@ func (s *TaskService) Paginate(tasks []model.Task, limit, offset int) ([]model.T
 		end = len(tasks)
 	}
 	return tasks[offset:end], nil
+}
+func (s *TaskService) SortTasks(tasks []model.Task, sortBy, order string) ([]model.Task, error) {
+	switch sortBy {
+	case "id":
+		sort.Slice(tasks, func(i, j int) bool {
+			if order == "asc" {
+				return tasks[i].ID < tasks[j].ID
+			} else {
+				return tasks[i].ID > tasks[j].ID
+			}
+		})
+	case "title":
+		sort.Slice(tasks, func(i, j int) bool {
+			if order == "asc" {
+				return tasks[i].Title < tasks[j].Title
+			} else {
+				return tasks[i].Title > tasks[j].Title
+			}
+		})
+	case "created_at":
+		sort.Slice(tasks, func(i, j int) bool {
+			if order == "asc" {
+				return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
+			} else {
+				return tasks[i].CreatedAt.After(tasks[j].CreatedAt)
+			}
+		})
+	}
+	return tasks, nil
 }
