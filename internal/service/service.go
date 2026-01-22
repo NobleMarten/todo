@@ -189,12 +189,7 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 	return task, nil
 }
 
-func (s *TaskService) FilterByDate(from, to time.Time) ([]model.Task, error) {
-	tasks, err := s.store.Load() // загрузка всех задач
-	if err != nil {
-		return nil, err
-	}
-
+func (s *TaskService) FilterByDate(tasks []model.Task, from, to time.Time) ([]model.Task, error) {
 	tonext := to.Add(24 * time.Hour) // чтобы включить задачи, созданные в день "to"
 
 	var filteredTasks []model.Task
@@ -206,12 +201,7 @@ func (s *TaskService) FilterByDate(from, to time.Time) ([]model.Task, error) {
 	return filteredTasks, nil
 }
 
-func (s *TaskService) FilterByDone(done bool) ([]model.Task, error) {
-	tasks, err := s.store.Load()
-	if err != nil {
-		return nil, err
-	}
-
+func (s *TaskService) FilterByDone(tasks []model.Task, done bool) ([]model.Task, error) {
 	var filteredTasks []model.Task
 
 	for _, t := range tasks {
@@ -220,4 +210,15 @@ func (s *TaskService) FilterByDone(done bool) ([]model.Task, error) {
 		}
 	}
 	return filteredTasks, nil
+}
+
+func (s *TaskService) Paginate(tasks []model.Task, limit, offset int) ([]model.Task, error) {
+	if offset > len(tasks) { // если смещение больше длины среза, возвращаем пустой срез
+		return []model.Task{}, nil
+	}
+	end := offset + limit // вычисляем конечный индекс
+	if end > len(tasks) { // если конечный индекс больше длины среза, корректируем его
+		end = len(tasks)
+	}
+	return tasks[offset:end], nil
 }
