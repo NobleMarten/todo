@@ -190,6 +190,36 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 	return task, nil
 }
 
+func (s *TaskService) Patch(id int, title *string, done *bool) (model.Task, error) {
+	if id <= 0 {
+		return model.Task{}, model.ErrInvalidID
+	}
+
+	if title == nil && done == nil {
+		return model.Task{}, model.ErrNothingToUpdate
+	}
+	if title != nil {
+		_, err := s.Update(id, *title)
+		if err != nil {
+			return model.Task{}, err
+		}
+	}
+	if done != nil {
+		if *done {
+			_, err := s.Done(id)
+			if err != nil {
+				return model.Task{}, err
+			}
+		} else {
+			_, err := s.Undone(id)
+			if err != nil {
+				return model.Task{}, err
+			}
+		}
+	}
+	return s.GetByID(id)
+}
+
 func (s *TaskService) FilterByDate(tasks []model.Task, from, to time.Time) ([]model.Task, error) {
 	tonext := to.Add(24 * time.Hour) // чтобы включить задачи, созданные в день "to"
 
@@ -223,6 +253,7 @@ func (s *TaskService) Paginate(tasks []model.Task, limit, offset int) ([]model.T
 	}
 	return tasks[offset:end], nil
 }
+
 func (s *TaskService) SortTasks(tasks []model.Task, sortBy, order string) ([]model.Task, error) {
 	switch sortBy {
 	case "id":

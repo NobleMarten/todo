@@ -2,12 +2,10 @@ package transport
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
-	"todo/internal/model"
 	"todo/internal/service"
 )
 
@@ -30,6 +28,12 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роути
 		h.PostTodo(w, r)
 	case http.MethodDelete:
 		h.DeleteTodo(w, r)
+	case http.MethodPatch:
+		if strings.HasPrefix(r.URL.Path, "/todos/") {
+			h.PatchTodo(w, r)
+		} else {
+			http.Error(w, "Not found", http.StatusNotFound)
+		}
 	case http.MethodPut:
 		if strings.HasPrefix(r.URL.Path, "/todos/") {
 			h.UpdTodo(w, r)
@@ -146,14 +150,7 @@ func (h *Handler) Getid(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.svc.GetByID(idInt)
 	if err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			http.Error(w, "Task not found", http.StatusNotFound) // ошибка 404
-			return
-		} else if errors.Is(err, model.ErrInvalidID) {
-			http.Error(w, "Invalid id parameter", http.StatusBadRequest) // ошибка 400
-			return
-		}
-		http.Error(w, "Failed to get task", http.StatusInternalServerError) // ошибка 500
+		WriteError(w, err) // Используем функцию WriteError для обработки ошибок.
 		return
 	}
 
@@ -186,12 +183,7 @@ func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.svc.Add(req.Title)
 	if err != nil {
-		if errors.Is(err, model.ErrEmptyTitle) {
-			http.Error(w, "Title cannot be empty", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Failed to add task", http.StatusBadRequest)
-		return
+		WriteError(w, err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -225,11 +217,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 
 	_, err = h.svc.Delete(id)
 	if err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			http.Error(w, "Task not found", http.StatusNotFound)
-			return
-		}
-		http.Error(w, "Failed to delete task", http.StatusInternalServerError)
+		WriteError(w, err)
 		return
 	}
 
@@ -275,16 +263,7 @@ func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
 		_, err = h.svc.Undone(id)
 	}
 	if err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			http.Error(w, "Task not found", http.StatusNotFound) //ошибка 404
-			return
-		} else if errors.Is(err, model.ErrAlreadyDone) || errors.Is(err, model.ErrNotDone) {
-			http.Error(w, err.Error(), http.StatusBadRequest) //ошибка 400
-			return
-		} else {
-			http.Error(w, "Failed to update task status", http.StatusInternalServerError) //ошибка 500
-			return
-		}
+		WriteError(w, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
@@ -321,14 +300,7 @@ func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 
 	task, err := h.svc.Update(id, req.Title)
 	if err != nil {
-		if errors.Is(err, model.ErrNotFound) {
-			http.Error(w, "Task not found", http.StatusNotFound)
-			return
-		} else if errors.Is(err, model.ErrInvalidID) {
-			http.Error(w, "Invalid id parameter", http.StatusBadRequest)
-			return
-		}
-		http.Error(w, "Failed to update task", http.StatusBadRequest)
+		WriteError(w, err)
 		return
 	}
 
@@ -339,69 +311,47 @@ func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func (h *Handler) FilterDate(w http.ResponseWriter, r *http.Request) {
-// 	// Логика обработки запроса на фильтрацию задач по create_date.
-// 	if r.Method != http.MethodGet {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-// 		return
-// 	}
+type PatchTodoRequest struct {
+	Title *string `json:"title,omitempty"`
+	Done  *bool   `json:"done,omitempty"`
+}
 
-// 	fromStr := r.URL.Query().Get("from")
-// 	toStr := r.URL.Query().Get("to")
-// 	if fromStr == "" || toStr == "" {
-// 		http.Error(w, "Missing from or to parameter", http.StatusBadRequest)
-// 		return
-// 	}
-// 	from, err := time.Parse("2006-01-02", fromStr)
-// 	if err != nil {
-// 		http.Error(w, "Invalid from parameter", http.StatusBadRequest)
-// 		return
-// 	}
-// 	to, err := time.Parse("2006-01-02", toStr)
-// 	if err != nil {
-// 		http.Error(w, "Invalid to parameter", http.StatusBadRequest)
-// 		return
-// 	}
-// 	tasks, err := h.svc.FilterByDate(from, to)
-// 	if err != nil {
-// 		http.Error(w, "Failed to filter tasks", http.StatusInternalServerError)
-// 		return
-// 	}
-// 	w.Header().Set("Content-Type", "application/json")
-// 	if err := json.NewEncoder(w).Encode(tasks); err != nil {
-// 		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
-// 		return
-// 	}
-// }
+func (h *Handler) PatchTodo(w http.ResponseWriter, r *http.Request) {
+	// Логика обработки запроса на добавление новой задачи (done и title)
+	if r.Method != http.MethodPatch {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 
-// func (h *Handler) FilterDone(w http.ResponseWriter, r *http.Request) {
-// 	// Логика обработки запроса на фильтрацию задач по create_date.
-// 	if r.Method != http.MethodGet {
-// 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed) // ошибка 405
-// 		return
-// 	}
+	var req PatchTodoRequest
 
-// 	doneStr := r.URL.Query().Get("done")
-// 	if doneStr == "" {
-// 		http.Error(w, "Missing done parameter", http.StatusBadRequest) // ошибка 400
-// 		return
-// 	}
+	idStr := strings.TrimPrefix(r.URL.Path, "/todos/")
+	if idStr == "" {
+		http.Error(w, "Missing id path", http.StatusBadRequest)
+		return
+	}
 
-// 	done, err := strconv.ParseBool(doneStr)
-// 	if err != nil {
-// 		http.Error(w, "Invalid done parameter", http.StatusBadRequest) // ошибка 400
-// 		return
-// 	}
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+		return
+	}
 
-// 	tasks, err := h.svc.FilterByDone(done)
-// 	if err != nil {
-// 		http.Error(w, "Failed to filter tasks", http.StatusInternalServerError) // ошибка 500
-// 		return
-// 	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body(json)", http.StatusBadRequest)
+		return
+	}
 
-// 	w.Header().Set("Content-Type", "application/json")
-// 	if err := json.NewEncoder(w).Encode(tasks); err != nil {
-// 		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError) // ошибка 500
-// 		return
-// 	}
-// }
+	task, err := h.svc.Patch(id, req.Title, req.Done)
+	if err != nil {
+		WriteError(w, err)
+		return
+
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(task); err != nil {
+		http.Error(w, "Failed to encode task", http.StatusInternalServerError)
+		return
+	}
+}
