@@ -6,12 +6,20 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"todo/internal/model"
 	"todo/internal/service"
 )
 
 // Handler представляет собой структуру, которая содержит ссылку на сервис TaskService.
 type Handler struct {
 	svc *service.TaskService // Поле svc хранит указатель на экземпляр TaskService.
+}
+
+type ListToDosResponse struct {
+	Items  []model.Task `json:"items"`
+	Total  int          `json:"total"`
+	Limit  int          `json:"limit,omitempty"`
+	Offset int          `json:"offset,omitempty"`
 }
 
 // NewHandler создает новый экземпляр Handler, принимая указатель на TaskService.
@@ -35,10 +43,12 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роути
 			http.Error(w, "Not found", http.StatusNotFound)
 		}
 	case http.MethodPut:
-		if strings.HasPrefix(r.URL.Path, "/todos/") {
+		if strings.HasSuffix(r.URL.Path, "/done") || strings.HasSuffix(r.URL.Path, "/undone") {
+			h.SetDone(w, r)
+		} else if strings.HasPrefix(r.URL.Path, "/todos/") {
 			h.UpdTodo(w, r)
 		} else {
-			http.Error(w, "Not found", http.StatusNotFound) // ошибка 404
+			http.Error(w, "Not found", http.StatusNotFound)
 		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -104,12 +114,16 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		limit, offset, ok, err := ParsePaginate(r)
+		total := len(tasks)
+		limit, offset := 0, 0
+
+		l, o, ok, err := ParsePaginate(r)
 		if err != nil {
 			http.Error(w, "Invalid limit or offset parameter", http.StatusBadRequest) // ошибка 400
 			return
 		}
 		if ok {
+			limit, offset = l, o
 			tasks, err = h.svc.Paginate(tasks, limit, offset)
 			if err != nil {
 				http.Error(w, "Failed to paginate tasks", http.StatusInternalServerError)
@@ -117,10 +131,17 @@ func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		resp := ListToDosResponse{ // Формируем ответ с задачами и метаданными.
+			Items:  tasks,
+			Total:  total,
+			Limit:  limit,
+			Offset: offset,
+		}
+
 		w.Header().Set("Content-Type", "application/json") // Устанавливаем заголовок Content-Type в ответе.
 
-		if err := json.NewEncoder(w).Encode(tasks); err != nil { // Кодируем задачи в JSON и записываем их в ответ.
-			http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
+		if err := json.NewEncoder(w).Encode(resp); err != nil { // Кодируем ответ в JSON и записываем их в ответ.
+			http.Error(w, "Failed to encode resp", http.StatusInternalServerError)
 			return
 		}
 	} else {
@@ -232,38 +253,38 @@ func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	idStr := r.URL.Query().Get("id")
+	idStr := strings.Split(strings.TrimPrefix(r.URL.Path, "/todos/"), "/")[0]
 	if idStr == "" {
 		http.Error(w, "Missing id parameter", http.StatusBadRequest) //ошибка 400
 		return
 	}
 
-	doneStr := r.URL.Query().Get("done")
-	if doneStr == "" {
+	action := strings.Split(strings.TrimPrefix(r.URL.Path, "/todos/"), "/")[1]
+	if action == "" {
 		http.Error(w, "Missing done parameter", http.StatusBadRequest) //ошибка 400
 		return
 	}
 
-	// распарсим id и done
+	// распарсим id
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
 		http.Error(w, "Invalid id parameter", http.StatusBadRequest) //ошибка 400
 		return
 	}
 
-	done, err := strconv.ParseBool(doneStr)
-	if err != nil {
-		http.Error(w, "Invalid done parameter", http.StatusBadRequest) //ошибка 400
-		return
-	}
-
-	if done {
+	if action == "done" {
 		_, err = h.svc.Done(id)
-	} else {
-		_, err = h.svc.Undone(id)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
 	}
-	if err != nil {
-		WriteError(w, err)
+	if action == "undone" {
+		_, err = h.svc.Undone(id)
+		if err != nil {
+			WriteError(w, err)
+			return
+		}
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
@@ -291,6 +312,7 @@ func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
 		return
 	}
+
 	var req UpdateTodoRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

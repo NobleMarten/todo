@@ -10,4 +10,5 @@ var (
 	ErrNotImplemented  = errors.New("not implemented")
 	ErrNotDone         = errors.New("task not done")
 	ErrNothingToUpdate = errors.New("nothing to patch")
+	ErrTitleTooLong    = errors.New("title too long")
 )

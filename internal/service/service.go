@@ -16,11 +16,22 @@ func NewTaskService(store storage.Storage) *TaskService {
 	return &TaskService{store: store}
 }
 
-func (s *TaskService) Add(title string) (model.Task, error) {
-
+func ValidateTitle(title string) (string, error) {
 	title = strings.TrimSpace(title)
 	if title == "" {
-		return model.Task{}, model.ErrEmptyTitle
+		return "", model.ErrEmptyTitle
+	}
+	if len([]rune(title)) > 120 {
+		return "", model.ErrTitleTooLong
+	}
+	return title, nil
+}
+
+func (s *TaskService) Add(title string) (model.Task, error) {
+
+	title, err := ValidateTitle(title)
+	if err != nil {
+		return model.Task{}, err
 	}
 
 	Tasks, err := s.store.Load()
@@ -161,10 +172,9 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 		return model.Task{}, model.ErrInvalidID
 	}
 
-	title = strings.TrimSpace(title)
-
-	if title == "" {
-		return model.Task{}, model.ErrEmptyTitle
+	title, err := ValidateTitle(title)
+	if err != nil {
+		return model.Task{}, err
 	}
 
 	task, err := s.GetByID(id)

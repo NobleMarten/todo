@@ -62,9 +62,17 @@ Server: http;//localhost:8080
   ```
   Response: 201 Created + созданная задача
 
-## Изменить done/undone
+## Изменить title, done/undone
   PUT /todos/done?id={id}&done={true|false}
 
+  PATCH /todos/17
+
+  ```json
+  {
+    "title": "test upd",
+    "done": true
+  }
+  ```
   Пример: /todos/done?id=2&done=true
   
   Response:
