@@ -1,0 +1,16 @@
+meta {
+  name: tasks list
+  type: http
+  seq: 1
+}
+
+get {
+  url: http://localhost:8080/todos
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+  timeout: 0
+}

@@ -1,0 +1,15 @@
+meta {
+  name: change title/done
+  type: http
+  seq: 5
+}
+
+patch {
+  url: http://localhost:8080/todos/17
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

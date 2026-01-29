@@ -15,6 +15,18 @@ type Handler struct {
 	svc *service.TaskService // Поле svc хранит указатель на экземпляр TaskService.
 }
 
+type AddTodoRequest struct {
+	Title string `json:"title"`
+}
+
+type UpdateTodoRequest struct {
+	Title string `json:"title"`
+}
+
+type PatchTodoRequest struct {
+	Title *string `json:"title,omitempty"`
+	Done  *bool   `json:"done,omitempty"`
+}
 type ListToDosResponse struct {
 	Items  []model.Task `json:"items"`
 	Total  int          `json:"total"`
@@ -182,10 +194,6 @@ func (h *Handler) Getid(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type AddTodoRequest struct {
-	Title string `json:"title"`
-}
-
 func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 	// Логика обработки запроса на добавление новой задачи.
 	log.Println("PostTodo called", r.Method, r.URL.Path)
@@ -290,10 +298,6 @@ func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
 }
 
-type UpdateTodoRequest struct {
-	Title string `json:"title"`
-}
-
 func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 	// Логика обработки запроса на обновление задачи.
 	if r.Method != http.MethodPut {
@@ -331,11 +335,6 @@ func (h *Handler) UpdTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode task", http.StatusInternalServerError) // ошибка 500
 		return
 	}
-}
-
-type PatchTodoRequest struct {
-	Title *string `json:"title,omitempty"`
-	Done  *bool   `json:"done,omitempty"`
 }
 
 func (h *Handler) PatchTodo(w http.ResponseWriter, r *http.Request) {
