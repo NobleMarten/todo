@@ -35,6 +35,11 @@ type ListToDosResponse struct {
 	Offset int          `json:"offset,omitempty"`
 }
 
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
+
 // NewHandler создает новый экземпляр Handler, принимая указатель на TaskService.
 func NewHandler(svc *service.TaskService) *Handler {
 	// Возвращает указатель на новый экземпляр Handler, инициализированный переданным сервисом.
