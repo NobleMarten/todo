@@ -27,6 +27,7 @@ type PatchTodoRequest struct {
 	Title *string `json:"title,omitempty"`
 	Done  *bool   `json:"done,omitempty"`
 }
+
 type ListToDosResponse struct {
 	Items  []model.Task `json:"items"`
 	Total  int          `json:"total"`
