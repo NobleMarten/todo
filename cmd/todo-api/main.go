@@ -11,7 +11,10 @@ import (
 func main() {
 	store := storage.NewFileStorage("data/tasks.json")
 
-	svc := service.NewTaskService(store)
+	svc, err := service.NewTaskService(store)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	h := transport.NewHandler(svc)
 

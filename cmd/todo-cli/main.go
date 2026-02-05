@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -24,7 +25,10 @@ func printhelp() {
 
 func main() {
 	store := storage.NewFileStorage("data/tasks.json") //создаем хранилище
-	svc := service.NewTaskService(store)               //создаем сервис, которому даем хранилище
+	svc, err := service.NewTaskService(store)          //создаем сервис, которому даем хранилище
+	if err != nil {
+		log.Fatal(err)
+	}
 	// сервис будет делать Load/Save через хранилище (store)
 
 	if len(os.Args) < 2 {

@@ -3,17 +3,49 @@ package service
 import (
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"todo/internal/model"
 	"todo/internal/storage"
 )
 
 type TaskService struct {
-	store storage.Storage
+	store storage.Storage    // интерфейс для взаимодействия с хранилищем данных
+	tasks map[int]model.Task // мапа для хранения задач, где ключ - это ID задачи, а значение - это сама задача. Мапа обеспечивает быстрый доступ к задачам по их ID.
+	mu    sync.RWMutex       // для обеспечения безопасности при конкурентном доступе к tasks
 }
 
-func NewTaskService(store storage.Storage) *TaskService {
-	return &TaskService{store: store}
+func NewTaskService(store storage.Storage) (*TaskService, error) {
+	task_slice, err := store.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	task_map := make(map[int]model.Task)
+
+	for _, t := range task_slice {
+		task_map[t.ID] = t
+	}
+
+	return &TaskService{
+		store: store,
+		tasks: task_map,
+	}, nil
+}
+
+func NewFakeTaskService(store storage.Storage) *TaskService {
+	task_slice, _ := store.Load()
+
+	task_map := make(map[int]model.Task)
+
+	for _, t := range task_slice {
+		task_map[t.ID] = t
+	}
+
+	return &TaskService{
+		store: store,
+		tasks: task_map,
+	}
 }
 
 func ValidateTitle(title string) (string, error) {
@@ -27,6 +59,14 @@ func ValidateTitle(title string) (string, error) {
 	return title, nil
 }
 
+func (s *TaskService) mapToSlice() []model.Task {
+	tasksSlice := make([]model.Task, 0, len(s.tasks))
+	for _, task := range s.tasks {
+		tasksSlice = append(tasksSlice, task)
+	}
+	return tasksSlice
+}
+
 func (s *TaskService) Add(title string) (model.Task, error) {
 
 	title, err := ValidateTitle(title)
@@ -34,14 +74,14 @@ func (s *TaskService) Add(title string) (model.Task, error) {
 		return model.Task{}, err
 	}
 
-	Tasks, err := s.store.Load()
-	if err != nil {
-		return model.Task{}, err
-	}
+	s.mu.Lock()         // блокируем мапу на запись для безопасного доступа
+	defer s.mu.Unlock() // разблокируем мапу после завершения функции
 
 	nextID := 1
-	if len(Tasks) > 0 {
-		nextID = Tasks[len(Tasks)-1].ID + 1
+	for id := range s.tasks {
+		if id >= nextID {
+			nextID = id + 1
+		}
 	}
 
 	t := model.Task{
@@ -52,7 +92,9 @@ func (s *TaskService) Add(title string) (model.Task, error) {
 		DoneAt:    nil,
 	}
 
-	Tasks = append(Tasks, t)
+	s.tasks[t.ID] = t
+
+	Tasks := s.mapToSlice() // преобразование мапы в срез для сохранения
 
 	if err := s.store.Save(Tasks); err != nil {
 		return model.Task{}, err
@@ -62,109 +104,110 @@ func (s *TaskService) Add(title string) (model.Task, error) {
 }
 
 func (s *TaskService) List() ([]model.Task, error) {
-	return s.store.Load()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tasksSlice := s.mapToSlice()
+
+	sort.Slice(tasksSlice, func(i, j int) bool {
+		return tasksSlice[i].ID < tasksSlice[j].ID
+	})
+
+	return tasksSlice, nil
 }
 
 func (s *TaskService) Done(id int) (model.Task, error) {
-	// TODO:
-	// 1) id>0 иначе ErrInvalidID
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}
-	// 2) Load model.Tasks
-	Tasks, err := s.store.Load()
-	if err != nil {
-		return model.Task{}, err
-	}
-	// 3) найти по ID, если нет -> ErrNotFound
-	for i, t := range Tasks {
-		if t.ID == id {
-			// 4) если уже Done -> ErrAlreadyDone
-			if t.Done {
-				return model.Task{}, model.ErrAlreadyDone
-			}
-			// 5) выставить Done=true, DoneAt=now, Save
-			now := time.Now()
-			Tasks[i].DoneAt = &now
-			Tasks[i].Done = true
-			err = s.store.Save(Tasks)
-			if err != nil {
-				return model.Task{}, err
-			}
-			return Tasks[i], nil
-		}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[id] // проверка наличия задачи в мапе
+	if !ok {
+		return model.Task{}, model.ErrNotFound
 	}
 
-	return model.Task{}, model.ErrNotFound
+	if task.Done {
+		return model.Task{}, model.ErrAlreadyDone
+	}
+	task.Done = true
+	now := time.Now()
+	task.DoneAt = &now
+	s.tasks[id] = task      // обновление задачи в мапе
+	tasks := s.mapToSlice() // преобразование мапы в срез для сохранения
+	if err := s.store.Save(tasks); err != nil {
+		return model.Task{}, err
+	}
+	return task, nil
 }
 
 func (s *TaskService) Undone(id int) (model.Task, error) {
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}
-	Tasks, err := s.store.Load()
-	if err != nil {
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[id]
+	if !ok {
+		return model.Task{}, model.ErrNotFound
+	}
+
+	if !task.Done {
+		return model.Task{}, model.ErrNotDone
+	}
+
+	task.Done = false
+	task.DoneAt = nil
+
+	s.tasks[id] = task
+
+	tasks := s.mapToSlice()
+	if err := s.store.Save(tasks); err != nil {
 		return model.Task{}, err
 	}
-	for i, t := range Tasks {
-		if t.ID == id {
-			if !t.Done {
-				return model.Task{}, model.ErrNotDone
-			}
-			Tasks[i].Done = false
-			Tasks[i].DoneAt = nil
-			err = s.store.Save(Tasks)
-			if err != nil {
-				return model.Task{}, err
-			}
-			return Tasks[i], nil
-		}
-	}
-	return model.Task{}, model.ErrNotFound
+	return task, nil
 }
 
 func (s *TaskService) Delete(id int) (model.Task, error) {
-	// TODO:
-	// 1) id>0 иначе ErrInvalidID
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}
-	// 2) Load model.Tasks
-	Tasks, err := s.store.Load()
-	if err != nil {
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	_, ok := s.tasks[id]
+	if !ok {
+		return model.Task{}, model.ErrNotFound
+	}
+
+	result := s.tasks[id]
+
+	delete(s.tasks, id)     // удаление задачи из мапы с помощью встроенной функции delete из библиотеки Go
+	tasks := s.mapToSlice() // преобразование мапы в срез для сохранения
+	if err := s.store.Save(tasks); err != nil {
 		return model.Task{}, err
 	}
-	// 3) найти по ID, если нет -> ErrNotFound
-	for i, t := range Tasks {
-		if t.ID == id {
-			// 4) удалить из среза (append(model.Tasks[:i], model.Tasks[i+1:]...))
-			deletedTask := Tasks[i]
-			Tasks = append(Tasks[:i], Tasks[i+1:]...) //... значит “вставь элементы второго среза поэлементно”, а не как один вложенный срез.
-			// 5) Save
-			err = s.store.Save(Tasks)
-			if err != nil {
-				return model.Task{}, err
-			}
-			return deletedTask, nil
-		}
-	}
-	return model.Task{}, model.ErrNotFound
+	return result, nil
 }
 
 func (s *TaskService) GetByID(id int) (model.Task, error) {
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}
-	tasks, err := s.store.Load()
-	if err != nil {
-		return model.Task{}, err
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	task, ok := s.tasks[id]
+	if !ok {
+		return model.Task{}, model.ErrNotFound
 	}
-	for _, t := range tasks {
-		if t.ID == id {
-			return t, nil
-		}
-	}
-	return model.Task{}, model.ErrNotFound
+	return task, nil
 }
 
 func (s *TaskService) Update(id int, title string) (model.Task, error) {
@@ -177,30 +220,28 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 		return model.Task{}, err
 	}
 
-	task, err := s.GetByID(id)
-	if err != nil {
-		return model.Task{}, err
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, ok := s.tasks[id]
+	if !ok {
+		return model.Task{}, model.ErrNotFound
 	}
 
 	task.Title = title
-	tasks, err := s.store.Load() // загрузка всех задач
-	if err != nil {
-		return model.Task{}, err
-	}
-	for i, t := range tasks {
-		if t.ID == id {
-			tasks[i] = task
-			break
-		}
-	}
-	err = s.store.Save(tasks) // сохранение обновленного списка задач
-	if err != nil {
+	s.tasks[id] = task
+
+	tasks := s.mapToSlice() // преобразование мапы в срез для сохранения
+
+	if err := s.store.Save(tasks); err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 }
 
 func (s *TaskService) Patch(id int, title *string, done *bool) (model.Task, error) {
+	// не атомарный, но так как в рамках одного запроса будет работать только один горутин, то проблем с конкурентностью не будет
+	// атомарный - это когда все операции выполняются как единое целое, и если одна из них не может быть выполнена, то все операции отменяются. В данном случае, если мы не можем обновить заголовок или статус задачи, то мы не хотим вносить изменения в задачу. Поэтому мы выполняем все операции внутри одной функции, и если какая-то из них не может быть выполнена, то мы возвращаем ошибку и не вносим изменения в задачу.
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}

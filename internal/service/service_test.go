@@ -44,7 +44,7 @@ func TestAdd(t *testing.T) {
 		},
 	}
 
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	task, err := service.Add("Second Task")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -82,7 +82,7 @@ func TestList(t *testing.T) {
 	store := &storage.FakeStorage{
 		List: returnedTasks,
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	tasks, err := service.List()
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -101,7 +101,7 @@ func TestDone_Success(t *testing.T) {
 			{ID: 2, Title: "Task Two", Done: false},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	task, err := service.Done(2)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -134,7 +134,7 @@ func TestDone_AlreadyDone(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Done(1)
 	if !errors.Is(err, model.ErrAlreadyDone) {
 		t.Fatalf("expected ErrAlreadyDone, got %v", err)
@@ -147,7 +147,7 @@ func TestDone_NotFound(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: false},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Done(2)
 	if !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
@@ -160,7 +160,7 @@ func TestDone_InvalidID(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: false},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Done(0)
 	if !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("expected ErrInvalidID, got %v", err)
@@ -175,7 +175,7 @@ func TestUndone_Success(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	task, err := service.Undone(1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -203,7 +203,7 @@ func TestUndone_AlreadyUndone(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: false},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Undone(1)
 	if !errors.Is(err, model.ErrNotDone) {
 		t.Fatalf("expected ErrAlreadyUndone, got %v", err)
@@ -216,7 +216,7 @@ func TestUndone_NotFound(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Undone(2)
 	if !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
@@ -229,7 +229,7 @@ func TestUndone_InvalidID(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Undone(0)
 	if !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("expected ErrInvalidID, got %v", err)
@@ -258,7 +258,7 @@ func TestDelete_TableDriven(t *testing.T) { // table-driven test
 					{ID: 2, Title: "Task Two", Done: false},
 				},
 			}
-			service := NewTaskService(store)
+			service := NewFakeTaskService(store)
 			_, err := service.Delete(tc.id)
 			if tc.wantErr == nil && err != nil {
 				t.Fatalf("unexpected error: %v", err)
@@ -289,7 +289,7 @@ func TestDelete_TableDriven(t *testing.T) { // table-driven test
 // 			{ID: 2, Title: "Task Two", Done: false},
 // 		},
 // 	}
-// 	service := NewTaskService(store)
+// 	service := NewFakeTaskService(store)
 // 	_, err := service.Delete(1)
 // 	if err != nil {
 // 		t.Fatalf("unexpected error: %v", err)
@@ -311,7 +311,7 @@ func TestDelete_TableDriven(t *testing.T) { // table-driven test
 // 			{ID: 1, Title: "Task One", Done: true},
 // 		},
 // 	}
-// 	service := NewTaskService(store)
+// 	service := NewFakeTaskService(store)
 // 	_, err := service.Delete(2)
 // 	if !errors.Is(err, model.ErrNotFound) {
 // 		t.Fatalf("expected ErrNotFound, got %v", err)
@@ -324,7 +324,7 @@ func TestDelete_TableDriven(t *testing.T) { // table-driven test
 // 			{ID: 1, Title: "Task One", Done: true},
 // 		},
 // 	}
-// 	service := NewTaskService(store)
+// 	service := NewFakeTaskService(store)
 // 	_, err := service.Delete(0)
 // 	if !errors.Is(err, model.ErrInvalidID) {
 // 		t.Fatalf("expected ErrInvalidID, got %v", err)
@@ -339,7 +339,7 @@ func TestGetByID_Succes(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	task, err := service.GetByID(1)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -358,7 +358,7 @@ func TestGetByID_NotFound(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.GetByID(2)
 	if !errors.Is(err, model.ErrNotFound) {
 		t.Fatalf("expected ErrNotFound, got %v", err)
@@ -371,7 +371,7 @@ func TestGetByID_InvalidID(t *testing.T) {
 			{ID: 1, Title: "Task One", Done: true},
 		},
 	}
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.GetByID(0)
 	if !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("expected ErrInvalidID, got %v", err)
@@ -392,7 +392,7 @@ func NewTestStore_info() *storage.FakeStorage {
 
 func TestPatch_Success(t *testing.T) {
 	store := NewTestStore_info()
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	newTitle := "Updated Task"
 	setTrue := true
 	task, err := service.Patch(1, &newTitle, &setTrue)
@@ -431,7 +431,7 @@ func TestPatch_Success(t *testing.T) {
 
 func TestPatch_NothingToUpdate(t *testing.T) {
 	store := NewTestStore_info()
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Patch(1, nil, nil)
 	if !errors.Is(err, model.ErrNothingToUpdate) {
 		t.Fatalf("expected ErrNothingToUpdate, got %v", err)
@@ -440,7 +440,7 @@ func TestPatch_NothingToUpdate(t *testing.T) {
 
 func TestPatch_InvalidID(t *testing.T) {
 	store := NewTestStore_info()
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	_, err := service.Patch(0, nil, nil)
 	if !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("expected ErrInvalidID, got %v", err)
@@ -449,7 +449,7 @@ func TestPatch_InvalidID(t *testing.T) {
 
 func TestPatch_Title(t *testing.T) {
 	store := NewTestStore_info()
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	newTitle := "Patched Title"
 	task, err := service.Patch(1, &newTitle, nil)
 	if err != nil {
@@ -478,7 +478,7 @@ func TestPatch_Title(t *testing.T) {
 
 func TestPatch_Done(t *testing.T) {
 	store := NewTestStore_info()
-	service := NewTaskService(store)
+	service := NewFakeTaskService(store)
 	newTrue := true
 	task, err := service.Patch(1, nil, &newTrue)
 	if err != nil {
