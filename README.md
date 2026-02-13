@@ -1,31 +1,60 @@
 # TODO (Go)
 
-Небольшой учебный проект на Go: TODO с хранением данных в json файле 
-(в дальнейшем в postgresql)
+REST API для управления задачами (CRUD) с фильтрацией, сортировкой, пагинацией, поддержкой PATCH, централизованной обработкой ошибок и unit/HTTP тестами
 
-Есть cli и http API
+### Имеется cli и http API
 
-Запуск:
+## Архитектура проекта
 
-## CLI
-```
-go run ./cmd/todo-cli -- help
-go run ./cmd/todo-cli -- list
-go run ./cmd/todo-cli -- add "купить молоко"
-```
+cmd/
+  todo-api/
+  todo-cli/
+data/
+internal/
+  model/
+  service/
+  storage/
+  transport/
 
-## API
-```
-go run ./cmd/todo-api
-```
+  service - бизнес-логика
+  storage - хранилище (Json, FakeStorage)
+  transport - http хендлеры
+  model - модель ToDo
 
-Server: http;//localhost:8080
+    Поля:
+  	•	id (int)
+  	•	title (string)
+  	•	done (bool)
+  	•	created_at (time)
+  	•	done_at (time|null)
+
+## Features
+  • CRUD operations
+  • PATCH 
+  • Фильтрация по date/done
+  • Сортировка по id/date/create_date
+  • Пагинация
+  • Валидация title
+  • Централизованная обработка ошибок JSON
+  • Unit тесты для service
+  • HTTP тесты для handlers
+  
 
 ## Получить список задач
   GET /todos
 
   Response: 200 OK
   Body: JSON-массив задач
+
+  ### Формат ответа API
+  ```json
+  {
+  "items": [...],
+  "total": 5,
+  "limit": 10,
+  "offset": 0
+  }
+  ```
 
 ## Получить задачу по ID
   GET /todos/{id}
@@ -63,7 +92,8 @@ Server: http;//localhost:8080
   Response: 201 Created + созданная задача
 
 ## Изменить title, done/undone
-  PUT /todos/done?id={id}&done={true|false}
+  # Отметить выполненным
+    PUT /todos/id/done(undone)
 
   PATCH /todos/17
 
@@ -90,15 +120,41 @@ Server: http;//localhost:8080
   	•	400 Bad Request
   	•	404 Not Found
 
-## Модель Todo
-  
-  Поля (пример):
-  	•	id (int)
-  	•	title (string)
-  	•	done (bool)
-  	•	created_at (time)
-  	•	done_at (time|null)
+## Формат ошибок
 
+```
+{
+  "code": "EMPTY_TITLE",
+  "message": "empty title"
+}
+```
 
+## Запуск:
+
+# CLI
+```
+go run ./cmd/todo-cli -- help
+go run ./cmd/todo-cli -- list
+go run ./cmd/todo-cli -- add "купить молоко"
+```
+
+# API
+```
+go run ./cmd/todo-api
+```
   
+## Roadmap
+
+- CLI
+- REST API
+- Filtering
+- Pagination
+- Sorting
+- PATCH
+- JSON error handing
+- Unit tests
+- HTTP tests
+- Postgresql storage
+- Middleware (logging)
+- Docker support
 

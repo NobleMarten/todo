@@ -212,20 +212,22 @@ func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 	var req AddTodoRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body(json)", http.StatusBadRequest)
+		WriteError(w, err)
 		return
 	}
 
 	task, err := h.svc.Add(req.Title)
 	if err != nil {
 		WriteError(w, err)
+		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 
 	if err := json.NewEncoder(w).Encode(task); err != nil {
-		http.Error(w, "Failed to encode task", http.StatusInternalServerError)
+		// http.Error(w, "Failed to encode task", http.StatusInternalServerError) // ошибка 500
+		WriteError(w, err)
 		return
 	}
 }
@@ -239,6 +241,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	idStr := strings.TrimPrefix(r.URL.Path, "/todos/")
+
 	if idStr == "" {
 		http.Error(w, "Missing id parameter", http.StatusBadRequest)
 		return
@@ -246,7 +249,7 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid id parameter", http.StatusBadRequest)
+		WriteError(w, err)
 		return
 	}
 
@@ -299,6 +302,9 @@ func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
 			WriteError(w, err)
 			return
 		}
+	}
+	if (action != "done") && (action != "undone") {
+		http.Error(w, "Invalid action parameter", http.StatusBadRequest)
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
