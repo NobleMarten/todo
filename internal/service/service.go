@@ -334,3 +334,17 @@ func (s *TaskService) SortTasks(tasks []model.Task, sortBy, order string) ([]mod
 	}
 	return tasks, nil
 }
+
+func (s *TaskService) Clear() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.tasks = make(map[int]model.Task)
+
+	tasks := s.mapToSlice()
+	if err := s.store.Save(tasks); err != nil {
+		return err
+	}
+
+	return nil
+}

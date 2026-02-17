@@ -13,6 +13,13 @@ func WriteError(w http.ResponseWriter, err error) { // Функция WriteError
 	var res ErrorResponse
 
 	switch {
+	case errors.Is(err, model.ErrNotAllowed):
+		status = http.StatusNotFound
+		res = ErrorResponse{
+			Code:    "METHOD_NOT_ALLOWED",
+			Message: err.Error(),
+		}
+
 	case errors.Is(err, model.ErrNotFound):
 		status = http.StatusNotFound
 		res = ErrorResponse{

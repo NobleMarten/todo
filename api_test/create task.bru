@@ -1,13 +1,19 @@
 meta {
   name: create task
   type: http
-  seq: 8
+  seq: 7
 }
 
 post {
   url: http://localhost:8080/todos
-  body: none
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "соединить frontend и backend"
+  }
 }
 
 settings {

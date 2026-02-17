@@ -51,14 +51,20 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роути
 	case http.MethodGet:
 		h.GetTodos(w, r)
 	case http.MethodPost:
-		h.PostTodo(w, r)
+		if strings.HasPrefix(r.URL.Path, "/todos/clear") {
+			h.ClearTask(w, r)
+		} else if r.URL.Path == "/todos" {
+			h.PostTodo(w, r)
+		} else {
+			WriteError(w, model.ErrNotAllowed)
+		}
 	case http.MethodDelete:
 		h.DeleteTodo(w, r)
 	case http.MethodPatch:
 		if strings.HasPrefix(r.URL.Path, "/todos/") {
 			h.PatchTodo(w, r)
 		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
+			WriteError(w, model.ErrNotAllowed)
 		}
 	case http.MethodPut:
 		if strings.HasSuffix(r.URL.Path, "/done") || strings.HasSuffix(r.URL.Path, "/undone") {
@@ -66,7 +72,7 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роути
 		} else if strings.HasPrefix(r.URL.Path, "/todos/") {
 			h.UpdTodo(w, r)
 		} else {
-			http.Error(w, "Not found", http.StatusNotFound)
+			WriteError(w, model.ErrNotAllowed)
 		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -260,7 +266,6 @@ func (h *Handler) DeleteTodo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent) // 204 No Content
-
 }
 
 func (h *Handler) SetDone(w http.ResponseWriter, r *http.Request) {
@@ -387,4 +392,19 @@ func (h *Handler) PatchTodo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to encode task", http.StatusInternalServerError)
 		return
 	}
+}
+
+func (h *Handler) ClearTask(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		WriteError(w, model.ErrNotAllowed)
+		return
+	}
+
+	err := h.svc.Clear()
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
