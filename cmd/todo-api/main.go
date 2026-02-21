@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"todo/internal/service"
 	"todo/internal/storage"
 	"todo/internal/transport"
@@ -11,7 +12,12 @@ import (
 func main() {
 	// repo := storage.NewFileRepo("data/tasks.json")
 	// repo, err := storage.NewPostgresRepo("postgres://noblemarten:jK2006Kbv21s@localhost:5432/todo_db?sslmode=disable")
-	repo, err := storage.NewPostgresRepo("DB_URL")
+
+	db_url := os.Getenv("DB_URL")
+	if db_url == "" {
+		log.Fatal("DB_URL environment variable is not set")
+	}
+	repo, err := storage.NewPostgresRepo(db_url)
 	if err != nil {
 		log.Fatal(err, "failed to connect to database")
 	}
