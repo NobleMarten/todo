@@ -5,9 +5,16 @@ meta {
 }
 
 patch {
-  url: http://localhost:8080/todos/17
-  body: none
+  url: http://localhost:8080/todos/1
+  body: json
   auth: inherit
+}
+
+body:json {
+  {
+    "title": "first task",
+    "done": true
+  }
 }
 
 settings {

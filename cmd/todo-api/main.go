@@ -10,9 +10,10 @@ import (
 
 func main() {
 	// repo := storage.NewFileRepo("data/tasks.json")
-	repo, err := storage.NewPostgresRepo("postgres://noblemarten:jK2006Kbv21s@localhost:5432/todo_db?sslmode=disable")
+	// repo, err := storage.NewPostgresRepo("postgres://noblemarten:jK2006Kbv21s@localhost:5432/todo_db?sslmode=disable")
+	repo, err := storage.NewPostgresRepo("DB_URL")
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err, "failed to connect to database")
 	}
 
 	svc, err := service.NewTaskService(repo)

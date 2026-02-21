@@ -33,7 +33,7 @@ func (pr *PostgresRepo) Create(title string) (model.Task, error) {
 }
 
 func (pr *PostgresRepo) List() ([]model.Task, error) {
-	rows, err := pr.db.Query("SELECT * FROM tasks")
+	rows, err := pr.db.Query("SELECT * FROM tasks ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -116,9 +116,15 @@ func (pr *PostgresRepo) Delete(id int) (model.Task, error) {
 }
 
 func (pr *PostgresRepo) Patch(id int, title *string, done *bool) (model.Task, error) {
+	if title != nil {
+		if *title == "" {
+			return model.Task{}, model.ErrEmptyTitle
+		}
+	}
+
 	query := `UPDATE tasks SET
 		title = COALESCE($1, title),
-		done = COALESCE ($2, done)
+		done = COALESCE ($2, done),
 		done_at = CASE
 			WHEN $2 = true THEN NOW()
 			WHEN $2 = false THEN NULL
@@ -130,20 +136,10 @@ func (pr *PostgresRepo) Patch(id int, title *string, done *bool) (model.Task, er
 	row := pr.db.QueryRow(query, title, done, id)
 	var task model.Task
 	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.CreatedAt, &task.DoneAt); err != nil {
-		row2 := pr.db.QueryRow("SELECT * FROM tasks WHERE id = $1", id)
-		err := row2.Scan()
 		if err == sql.ErrNoRows {
 			return model.Task{}, model.ErrNotFound
 		}
-		if err != nil {
-			return model.Task{}, err
-		}
-		if title != nil {
-			if *title == "" {
-				return model.Task{}, model.ErrEmptyTitle
-			}
-
-		}
+		return model.Task{}, err
 	}
 	return task, nil
 }
