@@ -24,8 +24,8 @@ func printhelp() {
 }
 
 func main() {
-	store := storage.NewFileStorage("data/tasks.json") //создаем хранилище
-	svc, err := service.NewTaskService(store)          //создаем сервис, которому даем хранилище
+	repo := storage.NewFileRepo("data/tasks.json") //создаем хранилище
+	svc, err := service.NewTaskService(repo)       //создаем сервис, которому даем хранилище
 	if err != nil {
 		log.Fatal(err)
 	}

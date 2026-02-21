@@ -9,9 +9,13 @@ import (
 )
 
 func main() {
-	store := storage.NewFileStorage("data/tasks.json")
+	// repo := storage.NewFileRepo("data/tasks.json")
+	repo, err := storage.NewPostgresRepo("postgres://noblemarten:jK2006Kbv21s@localhost:5432/todo_db?sslmode=disable")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	svc, err := service.NewTaskService(store)
+	svc, err := service.NewTaskService(repo)
 	if err != nil {
 		log.Fatal(err)
 	}

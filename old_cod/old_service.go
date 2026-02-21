@@ -87,3 +87,11 @@ package oldcod
 // 		break
 // 	}
 // }
+
+// func (s *TaskService) mapToSlice() []model.Task {
+// 	tasksSlice := make([]model.Task, 0, len(s.tasks))
+// 	for _, task := range s.tasks {
+// 		tasksSlice = append(tasksSlice, task)
+// 	}
+// 	return tasksSlice
+// }

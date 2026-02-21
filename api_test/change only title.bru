@@ -1,0 +1,15 @@
+meta {
+  name: change only title
+  type: http
+  seq: 11
+}
+
+put {
+  url: http://localhost:8080/todos/1
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

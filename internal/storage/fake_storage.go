@@ -2,17 +2,128 @@ package storage
 
 import "todo/internal/model"
 
-type FakeStorage struct {
-	List []model.Task
+type FakeRepo struct {
+	Tasks []model.Task
 }
 
-func (fs *FakeStorage) Load() ([]model.Task, error) {
-	test_list := make([]model.Task, len(fs.List))
-	copy(test_list, fs.List)
+// func (fs *FakeStorage) Load() ([]model.Task, error) {
+// 	test_list := make([]model.Task, len(fs.List))
+// 	copy(test_list, fs.List)
+// 	return test_list, nil
+// }
+
+// func (fs *FakeStorage) Save(tasks []model.Task) error {
+// 	fs.List = tasks
+// 	return nil
+// }
+
+func (fr *FakeRepo) Load() ([]model.Task, error) {
+	test_list := make([]model.Task, len(fr.Tasks))
+	copy(test_list, fr.Tasks)
 	return test_list, nil
 }
 
-func (fs *FakeStorage) Save(tasks []model.Task) error {
-	fs.List = tasks
+func (fr *FakeRepo) Save(tasks []model.Task) error {
+	fr.Tasks = tasks
 	return nil
+}
+
+func (fr *FakeRepo) Create(title string) (model.Task, error) {
+	nextID := 1
+	for _, task := range fr.Tasks {
+		if task.ID >= nextID {
+			nextID = task.ID + 1
+		}
+	}
+
+	newTask := model.Task{
+		ID:    nextID,
+		Title: title,
+		Done:  false,
+	}
+
+	fr.Tasks = append(fr.Tasks, newTask)
+	return newTask, nil
+}
+
+func (fr *FakeRepo) List() ([]model.Task, error) {
+	test_list := make([]model.Task, len(fr.Tasks))
+	copy(test_list, fr.Tasks)
+	return test_list, nil
+}
+
+func (fr *FakeRepo) Done(id int) (model.Task, error) {
+	for i, task := range fr.Tasks {
+		if task.ID == id {
+			if !task.Done {
+				return model.Task{}, model.ErrNotDone
+			}
+			fr.Tasks[i].Done = true
+			return fr.Tasks[i], nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}
+
+func (fr *FakeRepo) Undone(id int) (model.Task, error) {
+	for i, task := range fr.Tasks {
+		if task.ID == id {
+			if task.Done {
+				return model.Task{}, model.ErrNotDone
+			}
+			fr.Tasks[i].Done = false
+			return fr.Tasks[i], nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}
+
+func (fr *FakeRepo) Delete(id int) (model.Task, error) {
+	for i, task := range fr.Tasks {
+		if task.ID == id {
+			deletedTask := fr.Tasks[i]
+			fr.Tasks = append(fr.Tasks[:i], fr.Tasks[i+1:]...)
+			return deletedTask, nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}
+
+func (fr *FakeRepo) GetByID(id int) (model.Task, error) {
+	for _, task := range fr.Tasks {
+		if task.ID == id {
+			return task, nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}
+
+func (fr *FakeRepo) Update(id int, title string) (model.Task, error) {
+	for i, task := range fr.Tasks {
+		if task.ID == id {
+			fr.Tasks[i].Title = title
+			return fr.Tasks[i], nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
+}
+
+func (fr *FakeRepo) Clear() error {
+	fr.Tasks = []model.Task{}
+	return nil
+}
+
+func (fr *FakeRepo) Patch(id int, title *string, done *bool) (model.Task, error) {
+	for i, task := range fr.Tasks {
+		if task.ID == id {
+			if title != nil {
+				fr.Tasks[i].Title = *title
+			}
+			if done != nil {
+				fr.Tasks[i].Done = *done
+			}
+			return fr.Tasks[i], nil
+		}
+	}
+	return model.Task{}, model.ErrNotFound
 }
