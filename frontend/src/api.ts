@@ -70,7 +70,8 @@ export type Task = {
     if (params.limit) q.set('limit', String(params.limit))
   
     const qs = q.toString()
-    return request<ListTodosResponse>(`${API_URL}/todos${qs ? `?${qs}` : ''}`)
+    const data = await request<ListTodosResponse | null>(`${API_URL}/todos${qs ? `?${qs}` : ''}`)
+    return data ?? { items: [], total: 0 }
   }
   
   // ── GET /todos/:id ────────────────────────────────────────────────────────────
