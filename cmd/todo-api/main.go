@@ -50,5 +50,5 @@ func main() {
 
 	// Запускаем HTTP-сервер на порту 8080.
 	log.Println("API server started: http://localhost:8080")
-	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(mux))) // Логируем ошибку, если сервер не смог запуститься.
+	log.Fatal(http.ListenAndServe(":8080", corsMiddleware(mux)))
 }

@@ -31,7 +31,7 @@ export default function App() {
 
   // filters & sort
   const [filter, setFilter] = useState<FilterDone>('all')
-  const [sort,   setSort]   = useState<SortField>('id')
+  const [sort, setSort] = useState<SortField | ''>('')
   const [from,   setFrom]   = useState('')
   const [to,     setTo]     = useState('')
 
@@ -59,7 +59,7 @@ export default function App() {
     try {
       const data = await getTodos({
         done:  filter,
-        sort,
+        sort: sort || undefined,
         from:  from || undefined,
         to:    to   || undefined,
       })
@@ -262,14 +262,14 @@ export default function App() {
           </div>
 
           <div className="filter-group">
-            <select
-              className="sort-select"
-              value={sort}
-              onChange={e => setSort(e.target.value as SortField)}
-            >
-              <option value="id">по ID</option>
-              <option value="create_date">по дате</option>
-            </select>
+          <select
+            className="sort-select"
+            value={sort}
+            onChange={e => setSort(e.target.value as SortField)}
+          >
+            <option value="">без сортировки</option>
+            <option value="create_date">по дате</option>
+          </select>
           </div>
 
           <div className="filter-group date-range">

@@ -46,11 +46,13 @@ func SortParse(r *http.Request) (sortBy, order string, ok bool, err error) {
 	}
 	sortBy = r.URL.Query().Get("sort")
 	order = r.URL.Query().Get("order")
-	if order != "asc" && order != "desc" {
-		return "", "", false, errors.New("invalid order parameter")
-	}
+
 	if order == "" {
 		order = "asc" // значение по умолчанию
+	}
+
+	if order != "asc" && order != "desc" {
+		return "", "", false, errors.New("invalid order parameter")
 	}
 	return sortBy, order, true, nil
 }
