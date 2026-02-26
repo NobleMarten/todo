@@ -9,6 +9,21 @@ import (
 	"todo/internal/transport"
 )
 
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 	db_url := os.Getenv("DB_URL")
 	if db_url == "" {
@@ -26,9 +41,11 @@ func main() {
 
 	h := transport.NewHandler(svc)
 
-	http.HandleFunc("/todos", h.Todos)       // Регистрируем обработчик (роут) для пути /todos.
-	http.HandleFunc("/todos/", h.Todos)      // Регистрируем обработчик для пути /todos/{id}.
-	http.HandleFunc("/todos/clear", h.Todos) // Регистрируем обработчик для пути /todos/clear.
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/todos", h.Todos)       // Регистрируем обработчик (роут) для пути /todos.
+	mux.HandleFunc("/todos/", h.Todos)      // Регистрируем обработчик для пути /todos/{id}.
+	mux.HandleFunc("/todos/clear", h.Todos) // Регистрируем обработчик для пути /todos/clear.
 	//http.HandleFunc("/todos/done", h.SetDone) // Регистрируем обработчик для пути /todos/done.
 
 	// Запускаем HTTP-сервер на порту 8080.
