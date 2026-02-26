@@ -1,161 +1,169 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import "./App.css"
-import { Task } from "./types/task"
-import { addTodo, deleteTodo, getTodos, toggleTodo } from "./api/todos"
-import { TaskList } from "./components/TaskList"
-import { Toast, ToastState } from "./components/Toast"
+import React, { useEffect, useMemo, useState } from "react"
+import { addTodo, clearTodos, deleteTodo, getTodos, setDone, type Task } from "./api"
 
 export default function App() {
-  const [tasks, setTasks] = useState<Task[]>([])
+  const [items, setItems] = useState<Task[]>([])
   const [title, setTitle] = useState("")
-  const [loading, setLoading] = useState(true)
-  const [adding, setAdding] = useState(false)
-  const [busyIds, setBusyIds] = useState<Set<number>>(new Set())
-  const [toast, setToast] = useState<ToastState>(null)
-  const toastTimer = useRef<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [errMsg, setErrMsg] = useState<string | null>(null)
+  const [busy, setBusy] = useState<Record<number, boolean>>({})
+  const [busyClear, setBusyClear] = useState(false)
 
-  const remaining = useMemo(() => tasks.filter(t => !t.done).length, [tasks])
+  const doneCount = useMemo(() => items.filter((t) => t.done).length, [items])
 
-  function showToast(t: ToastState) {
-    setToast(t)
-    if (toastTimer.current) window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2200)
-  }
-
-  async function load() {
+  async function refresh() {
+    setLoading(true)
+    setErrMsg(null)
     try {
-      setLoading(true)
-      const data = await getTodos()
-      setTasks(data)
+      const res = await getTodos()
+      setItems(res.items ?? [])
     } catch (e) {
-      console.error(e)
-      showToast({ type: "error", text: "Не удалось загрузить задачи" })
+      setErrMsg(e instanceof Error ? e.message : "Unknown error")
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    load()
+    refresh()
   }, [])
 
-  async function handleAdd() {
-    const v = title.trim()
-    if (!v || adding) return
-
-    setAdding(true)
-
-    // оптимистично показываем новую задачу сразу (временный id)
-    const tempId = Date.now()
-    const optimistic: Task = {
-      id: tempId,
-      title: v,
-      done: false,
-      created_at: new Date().toISOString(),
-      done_at: undefined,
-    }
-
-    setTasks(prev => [optimistic, ...prev])
-    setTitle("")
-
+  async function onAdd() {
+    const t = title.trim()
+    if (!t) return
+    setErrMsg(null)
+    setLoading(true)
     try {
-      const created = await addTodo(v)
-      // заменяем temp задачу на реальную с id от сервера
-      setTasks(prev => prev.map(t => (t.id === tempId ? created : t)))
-      showToast({ type: "success", text: "Добавлено" })
+      const created = await addTodo(t)
+      setTitle("")
+      setItems((prev) => [created, ...prev])
     } catch (e) {
-      // откатываем
-      setTasks(prev => prev.filter(t => t.id !== tempId))
-      showToast({ type: "error", text: "Не удалось добавить задачу" })
-      console.error(e)
+      setErrMsg(e instanceof Error ? e.message : "Unknown error")
     } finally {
-      setAdding(false)
+      setLoading(false)
     }
   }
 
-  async function handleToggle(id: number, done: boolean) {
-    if (busyIds.has(id)) return
-
-    setBusyIds(prev => new Set(prev).add(id))
-    // оптимистично
-    setTasks(prev => prev.map(t => (t.id === id ? { ...t, done } : t)))
-
+  async function onToggle(id: number, nextDone: boolean) {
+    setErrMsg(null)
+    setBusy((p) => ({ ...p, [id]: true }))
     try {
-      await toggleTodo(id, done)
+      await setDone(id, nextDone)
+      setItems((prev) => prev.map((t) => (t.id === id ? { ...t, done: nextDone } : t)))
     } catch (e) {
-      // откат
-      setTasks(prev => prev.map(t => (t.id === id ? { ...t, done: !done } : t)))
-      showToast({ type: "error", text: "Не удалось изменить статус" })
-      console.error(e)
+      setErrMsg(e instanceof Error ? e.message : "Unknown error")
     } finally {
-      setBusyIds(prev => {
-        const copy = new Set(prev)
-        copy.delete(id)
-        return copy
-      })
+      setBusy((p) => ({ ...p, [id]: false }))
     }
   }
 
-  async function handleDelete(id: number) {
-    if (busyIds.has(id)) return
-
-    setBusyIds(prev => new Set(prev).add(id))
-    const before = tasks
-
-    // оптимистично удаляем из UI
-    setTasks(prev => prev.filter(t => t.id !== id))
-
+  async function onDelete(id: number) {
+    setErrMsg(null)
+    setBusy((p) => ({ ...p, [id]: true }))
     try {
       await deleteTodo(id)
-      showToast({ type: "success", text: "Удалено" })
+      setItems((prev) => prev.filter((t) => t.id !== id))
     } catch (e) {
-      // откат
-      setTasks(before)
-      showToast({ type: "error", text: "Не удалось удалить" })
-      console.error(e)
+      setErrMsg(e instanceof Error ? e.message : "Unknown error")
     } finally {
-      setBusyIds(prev => {
-        const copy = new Set(prev)
-        copy.delete(id)
-        return copy
-      })
+      setBusy((p) => ({ ...p, [id]: false }))
+    }
+  }
+
+  async function onClear() {
+    setErrMsg(null)
+    setBusyClear(true)
+    try {
+      await clearTodos()
+      setItems([])
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : "Unknown error")
+    } finally {
+      setBusyClear(false)
     }
   }
 
   return (
-    <>
-      <Toast toast={toast} />
+    <div style={{ maxWidth: 720, margin: "40px auto", padding: 16, fontFamily: "system-ui, -apple-system, Segoe UI, Roboto" }}>
+      <h1 style={{ marginBottom: 8 }}>Todo</h1>
 
-      <div className="container">
-        <div className="header">
-          <h1 className="title">Todo</h1>
-          <p className="subtitle">{loading ? "загрузка..." : `${remaining} осталось`}</p>
-        </div>
-
-        <div className="form">
-          <input
-            className="input"
-            value={title}
-            onChange={e => setTitle(e.target.value)}
-            placeholder="Новая задача"
-            onKeyDown={e => {
-              if (e.key === "Enter") handleAdd()
-            }}
-            disabled={adding}
-          />
-          <button className="btn btnPrimary" onClick={handleAdd} disabled={adding}>
-            {adding ? <span className="spinner" /> : "Добавить"}
-          </button>
-        </div>
-
-        {loading ? (
-          <div className="footer">Подгружаем…</div>
-        ) : (
-          <TaskList tasks={tasks} onToggle={handleToggle} onDelete={handleDelete} busyIds={busyIds} />
-        )}
-
-        <div className="footer">Приколы включены: анимации, тосты, оптимистичные апдейты 😄</div>
+      <div style={{ opacity: 0.7, marginBottom: 16 }}>
+        total: {items.length} • done: {doneCount}
       </div>
-    </>
+
+      {errMsg && (
+        <div style={{ marginBottom: 16, padding: 12, border: "1px solid #ffb4b4", borderRadius: 10, background: "#fff5f5" }}>
+          {errMsg}
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Add task..."
+          style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #ddd" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onAdd()
+          }}
+        />
+        <button
+          onClick={onAdd}
+          disabled={loading}
+          style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", background: "white", cursor: "pointer" }}
+        >
+          Add
+        </button>
+
+        <button
+          onClick={onClear}
+          disabled={busyClear || items.length === 0}
+          style={{ padding: "10px 14px", borderRadius: 10, border: "1px solid #ddd", background: "white", cursor: "pointer" }}
+        >
+          {busyClear ? "Clearing..." : "Clear"}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {loading && <div style={{ opacity: 0.7 }}>Loading...</div>}
+
+        {!loading && items.length === 0 && <div style={{ opacity: 0.7 }}>No tasks yet</div>}
+
+        {items.map((t) => {
+          const isBusy = !!busy[t.id]
+          return (
+            <div
+              key={t.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: 12,
+                border: "1px solid #eee",
+                borderRadius: 12,
+                background: "white",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={t.done}
+                disabled={isBusy}
+                onChange={(e) => onToggle(t.id, e.target.checked)}
+              />
+              <div style={{ flex: 1, textDecoration: t.done ? "line-through" : "none", opacity: t.done ? 0.6 : 1 }}>
+                {t.title}
+              </div>
+              <button
+                onClick={() => onDelete(t.id)}
+                disabled={isBusy}
+                style={{ padding: "8px 10px", borderRadius: 10, border: "1px solid #ddd", background: "white", cursor: "pointer" }}
+              >
+                {isBusy ? "..." : "Delete"}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
