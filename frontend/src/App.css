@@ -1,0 +1,117 @@
+/* --- карточка/форма (если у тебя их уже нет — добавь тоже) --- */
+.container {
+  width: min(560px, calc(100vw - 32px));
+  background: #161a22;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 22px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.title {
+  margin: 0;
+  font-size: 40px;
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  margin: 0;
+  opacity: 0.7;
+  font-size: 14px;
+}
+
+.form {
+  display: flex;
+  gap: 10px;
+  margin: 16px 0 18px;
+}
+
+.input {
+  flex: 1;
+  height: 42px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #0f131a;
+  color: #e9eef5;
+  outline: none;
+}
+
+.input:focus {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.btn {
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: #20263a;
+  color: #e9eef5;
+  cursor: pointer;
+}
+
+.btnPrimary {
+  background: #2b3a7a;
+}
+
+/* --- список --- */
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+/* ВОТ ЭТО КЛЮЧЕВО: item должен быть grid/flex */
+.item {
+  display: grid;
+  grid-template-columns: 20px 1fr 36px;
+  align-items: center;
+  gap: 10px;
+
+  padding: 10px 10px;
+  border-radius: 14px;
+  background: #0f131a;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.text {
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.textDone {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.iconBtn {
+  width: 36px;
+  height: 32px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ff6b6b;
+  cursor: pointer;
+}
+
+.iconBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
