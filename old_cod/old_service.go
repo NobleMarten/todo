@@ -95,3 +95,108 @@ package oldcod
 // 	}
 // 	return tasksSlice
 // }
+
+// test.go
+
+// func TestDelete_Success(t *testing.T) {
+// 	store := &storage.FakeStorage{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 			{ID: 2, Title: "Task Two", Done: false},
+// 		},
+// 	}
+// 	service := NewFakeTaskService(store)
+// 	_, err := service.Delete(1)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	tasks, err := store.Load()
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	for _, tsk := range tasks {
+// 		if tsk.ID == 1 {
+// 			t.Fatalf("expected task ID 1 to be deleted")
+// 		}
+// 	}
+// }
+
+// func TestDelete_NotFound(t *testing.T) {
+// 	store := &storage.FakeStorage{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 		},
+// 	}
+// 	service := NewFakeTaskService(store)
+// 	_, err := service.Delete(2)
+// 	if !errors.Is(err, model.ErrNotFound) {
+// 		t.Fatalf("expected ErrNotFound, got %v", err)
+// 	}
+// }
+
+// func TestDelete_InvalidID(t *testing.T) {
+// 	store := &storage.FakeStorage{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 		},
+// 	}
+// 	service := NewFakeTaskService(store)
+// 	_, err := service.Delete(0)
+// 	if !errors.Is(err, model.ErrInvalidID) {
+// 		t.Fatalf("expected ErrInvalidID, got %v", err)
+// 	}
+// }
+
+// func TestGetByID_Succes(t *testing.T) {
+// 	store := &storage.FakeRepo{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 		},
+// 	}
+// 	service, err := NewTaskService(store)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	task, err := service.GetByID(1)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	tasks, err := store.Load()
+// 	for _, tsk := range tasks {
+// 		if tsk.ID != task.ID {
+// 			t.Fatalf("expected ID %d, got %d", tsk.ID, task.ID)
+// 		}
+// 	}
+// }
+
+// func TestGetByID_NotFound(t *testing.T) {
+// 	store := &storage.FakeRepo{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 		},
+// 	}
+// 	service, err := NewTaskService(store)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	_, err = service.GetByID(2)
+// 	if !errors.Is(err, model.ErrNotFound) {
+// 		t.Fatalf("expected ErrNotFound, got %v", err)
+// 	}
+// }
+
+// func TestGetByID_InvalidID(t *testing.T) {
+// 	store := &storage.FakeRepo{
+// 		Tasks: []model.Task{
+// 			{ID: 1, Title: "Task One", Done: true},
+// 		},
+// 	}
+// 	service, err := NewTaskService(store)
+// 	if err != nil {
+// 		t.Fatalf("unexpected error: %v", err)
+// 	}
+// 	_, err = service.GetByID(0)
+// 	if !errors.Is(err, model.ErrInvalidID) {
+// 		t.Fatalf("expected ErrInvalidID, got %v", err)
+// 	}
+// }
