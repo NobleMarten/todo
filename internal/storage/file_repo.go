@@ -157,7 +157,6 @@ func (fr *FileRepo) Patch(id int, title *string, done *bool) (model.Task, error)
 				tasks[i].Title = *title
 			}
 			if done != nil {
-				tasks[i].Done = *done
 				if *done {
 					_, err := fr.Done(id)
 					if err != nil {

@@ -46,9 +46,15 @@ func WriteError(w http.ResponseWriter, err error) { // Функция WriteError
 			Message: err.Error(),
 		}
 	case errors.Is(err, model.ErrAlreadyDone):
-		status = http.StatusBadRequest
+		status = http.StatusConflict
 		res = ErrorResponse{
 			Code:    "ALREADY_DONE",
+			Message: err.Error(),
+		}
+	case errors.Is(err, model.ErrAlreadyUndone):
+		status = http.StatusConflict
+		res = ErrorResponse{
+			Code:    "ALREADY_UNDONE",
 			Message: err.Error(),
 		}
 	case errors.Is(err, model.ErrNotDone):

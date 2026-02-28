@@ -98,15 +98,11 @@ export default function App() {
   // ── toggle (uses setDone: PUT /todos/:id/done|undone) ─────────────────────
 
   async function handleToggle(todo: Task) {
-    const next = !todo.done
-    // optimistic
-    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: next } : t))
     try {
-      await setDone(todo.id, next)
+      await setDone(todo.id, !todo.done)
       await load()
-    } catch {
-      // rollback
-      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: todo.done } : t))
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Ошибка')
     }
   }
 

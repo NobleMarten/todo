@@ -106,10 +106,12 @@ func (s *TaskService) Patch(id int, title *string, done *bool) (model.Task, erro
 		return model.Task{}, model.ErrInvalidID
 	}
 
-	ValidateTitle(*title)
-
 	if title == nil && done == nil {
 		return model.Task{}, model.ErrNothingToUpdate
+	}
+
+	if title != nil {
+		ValidateTitle(*title)
 	}
 
 	return s.repo.Patch(id, title, done)
