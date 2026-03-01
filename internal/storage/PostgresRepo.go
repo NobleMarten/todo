@@ -87,7 +87,7 @@ func (pr *PostgresRepo) Done(id int) (model.Task, error) {
 }
 
 func (pr *PostgresRepo) Undone(id int) (model.Task, error) {
-	row := pr.db.QueryRow("UPDATE tasks SET done = false, done_at = NULL, WHERE id = $1 AND done = true RETURNING id, title, done, created_at, done_at", id)
+	row := pr.db.QueryRow("UPDATE tasks SET done = false, done_at = NULL WHERE id = $1 AND done = true RETURNING id, title, done, created_at, done_at", id)
 	var task model.Task
 	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.CreatedAt, &task.DoneAt); err != nil {
 		row2 := pr.db.QueryRow("SELECT * FROM tasks WHERE id = $1", id)
