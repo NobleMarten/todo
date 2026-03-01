@@ -190,7 +190,7 @@ body {
   outline: none;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 16px;
   padding: 12px 0;
   min-width: 0;
 }
@@ -458,7 +458,7 @@ body {
   outline: none;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 16px;
   padding: 2px 8px;
   box-shadow: 0 0 0 2px var(--accent-dim);
 }
