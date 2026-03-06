@@ -30,7 +30,7 @@ export default function App() {
   const [error,   setError]   = useState<string | null>(null)
 
   // filters & sort
-  const [filter, setFilter] = useState<FilterDone>('all')
+  const [filter, setFilter] = useState<FilterDone>('false')
   const [sort, setSort] = useState<SortField | ''>('')
   const [from,   setFrom]   = useState('')
   const [to,     setTo]     = useState('')
