@@ -126,6 +126,11 @@ export default function App() {
       let items = data.items ?? []
       if (filter === 'false') {
         items = items.filter(t => !t.done || isToday(t.done_at))
+        // Сортируем: выполненные (done: true) идут вверх
+        items.sort((a, b) => {
+          if (a.done === b.done) return 0
+          return a.done ? -1 : 1
+        })
       }
       setTodos(items)
       setTotal(data.total ?? 0)
