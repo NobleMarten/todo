@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -80,6 +81,7 @@ func TestAdd(t *testing.T) {
 // // TestList
 
 func TestList(t *testing.T) {
+	ctx := context.Background()
 	returnedTasks := []model.Task{
 		{ID: 1, Title: "Task One", Done: false},
 	}
@@ -90,7 +92,7 @@ func TestList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	tasks, err := service.List() //
+	tasks, err := service.List(ctx)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

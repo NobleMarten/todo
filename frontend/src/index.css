@@ -219,6 +219,42 @@ body {
 
 .add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
+.mic-btn {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--transition), color var(--transition);
+}
+
+.mic-btn:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.mic-btn.active {
+  color: var(--red);
+  background: var(--red-dim);
+  animation: pulse-mic 1s ease-in-out infinite;
+}
+
+.add-input-wrap.is-listening {
+  border-color: var(--red);
+  box-shadow: 0 0 0 3px var(--red-dim);
+}
+
+@keyframes pulse-mic {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
 .add-error {
   margin-top: 6px;
   font-size: 12px;
@@ -437,7 +473,8 @@ body {
   font-size: 14px;
   cursor: default;
   transition: color var(--transition);
-  white-space: nowrap;
+  white-space: normal;
+  word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -458,7 +495,7 @@ body {
   outline: none;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 16px;
+  font-size: 14px;
   padding: 2px 8px;
   box-shadow: 0 0 0 2px var(--accent-dim);
 }

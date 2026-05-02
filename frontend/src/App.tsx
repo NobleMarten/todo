@@ -1,5 +1,5 @@
-import React from 'react'
 import { useState, useEffect, useRef, useCallback } from 'react'
+import React from 'react'
 import {
   getTodos,
   addTodo,
@@ -21,6 +21,55 @@ function formatDate(iso?: string) {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
 }
 
+function isToday(iso?: string | null): boolean {
+  if (!iso) return false
+  const d = new Date(iso)
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
+// ─── speech hook ──────────────────────────────────────────────────────────────
+
+function useSpeech(onResult: (text: string) => void) {
+  const [listening, setListening] = useState(false)
+  const recRef = useRef<any>(null)
+
+  const start = useCallback(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+    if (!SR) {
+      alert('Голосовой ввод не поддерживается в этом браузере')
+      return
+    }
+
+    const rec = new SR()
+    rec.continuous = false
+    rec.interimResults = false
+    rec.lang = '' // язык системы (авто)
+
+    rec.onstart  = () => setListening(true)
+    rec.onend    = () => setListening(false)
+    rec.onerror  = () => setListening(false)
+    rec.onresult = (e: any) => {
+      const text = e.results[0][0].transcript.trim()
+      if (text) onResult(text)
+    }
+
+    recRef.current = rec
+    rec.start()
+  }, [onResult])
+
+  const stop = useCallback(() => {
+    recRef.current?.stop()
+    setListening(false)
+  }, [])
+
+  return { listening, start, stop }
+}
+
 // ─── App ──────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -31,7 +80,7 @@ export default function App() {
 
   // filters & sort
   const [filter, setFilter] = useState<FilterDone>('false')
-  const [sort, setSort] = useState<SortField | ''>('')
+  const [sort,   setSort]   = useState<SortField | ''>('')
   const [from,   setFrom]   = useState('')
   const [to,     setTo]     = useState('')
 
@@ -45,11 +94,19 @@ export default function App() {
   const [editVal, setEditVal] = useState('')
 
   // animations
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [clearing,   setClearing]   = useState(false)
+  const [deletingId,       setDeletingId]       = useState<number | null>(null)
+  const [clearing,         setClearing]         = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // ── voice ─────────────────────────────────────────────────────────────────
+
+  const { listening, start, stop } = useSpeech((text) => {
+    setInput(text)
+    setAddError(null)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  })
 
   // ── load ──────────────────────────────────────────────────────────────────
 
@@ -57,13 +114,20 @@ export default function App() {
     setLoading(true)
     setError(null)
     try {
+      // «активные» — fetch all, then client-side filter:
+      // show undone + completed today (to see daily progress)
+      const apiFilter = filter === 'false' ? 'all' as FilterDone : filter
       const data = await getTodos({
-        done:  filter,
-        sort: sort || undefined,
+        done:  apiFilter,
+        sort:  sort || undefined,
         from:  from || undefined,
         to:    to   || undefined,
       })
-      setTodos(data.items ?? [])
+      let items = data.items ?? []
+      if (filter === 'false') {
+        items = items.filter(t => !t.done || isToday(t.done_at))
+      }
+      setTodos(items)
       setTotal(data.total ?? 0)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Ошибка загрузки')
@@ -95,14 +159,15 @@ export default function App() {
     }
   }
 
-  // ── toggle (uses setDone: PUT /todos/:id/done|undone) ─────────────────────
+  // ── toggle ────────────────────────────────────────────────────────────────
 
   async function handleToggle(todo: Task) {
+    setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: !t.done } : t))
     try {
       await setDone(todo.id, !todo.done)
       await load()
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Ошибка')
+    } catch {
+      setTodos(prev => prev.map(t => t.id === todo.id ? { ...t, done: todo.done } : t))
     }
   }
 
@@ -110,7 +175,6 @@ export default function App() {
 
   async function handleDelete(id: number) {
     setDeletingId(id)
-    // wait for CSS exit animation
     setTimeout(async () => {
       try {
         await deleteTodo(id)
@@ -138,7 +202,7 @@ export default function App() {
     }
   }
 
-  // ── inline edit (uses patchTodo: PATCH /todos/:id) ────────────────────────
+  // ── edit ──────────────────────────────────────────────────────────────────
 
   function startEdit(todo: Task) {
     setEditId(todo.id)
@@ -149,12 +213,11 @@ export default function App() {
     const title = editVal.trim()
     if (!title) { cancelEdit(); return }
     setEditId(null)
-    // optimistic
     setTodos(prev => prev.map(t => t.id === id ? { ...t, title } : t))
     try {
       await patchTodo(id, { title })
     } catch {
-      await load() // rollback on error
+      await load()
     }
   }
 
@@ -193,7 +256,6 @@ export default function App() {
               </span>
             </div>
 
-            {/* clear button */}
             {todos.length > 0 && !showClearConfirm && (
               <button
                 className="clear-btn"
@@ -219,18 +281,26 @@ export default function App() {
 
         {/* ── add form ── */}
         <div className="add-form">
-          <div className={`add-input-wrap ${addError ? 'has-error' : ''}`}>
+          <div className={`add-input-wrap ${addError ? 'has-error' : ''} ${listening ? 'is-listening' : ''}`}>
             <span className="prompt">›</span>
             <input
               ref={inputRef}
               className="add-input"
-              placeholder="новая задача..."
+              placeholder={listening ? 'слушаю...' : 'новая задача...'}
               value={input}
               onChange={e => { setInput(e.target.value); setAddError(null) }}
               onKeyDown={e => e.key === 'Enter' && handleAdd()}
               disabled={adding}
               autoFocus
             />
+            <button
+              className={`mic-btn ${listening ? 'active' : ''}`}
+              onClick={listening ? stop : start}
+              title={listening ? 'Остановить' : 'Голосовой ввод'}
+              type="button"
+            >
+              <MicIcon listening={listening} />
+            </button>
             <button
               className={`add-btn ${adding ? 'loading' : ''}`}
               onClick={handleAdd}
@@ -258,14 +328,14 @@ export default function App() {
           </div>
 
           <div className="filter-group">
-          <select
-            className="sort-select"
-            value={sort}
-            onChange={e => setSort(e.target.value as SortField)}
-          >
-            <option value="">без сортировки</option>
-            <option value="create_date">по дате</option>
-          </select>
+            <select
+              className="sort-select"
+              value={sort}
+              onChange={e => setSort(e.target.value as SortField)}
+            >
+              <option value="">без сортировки</option>
+              <option value="create_date">по дате</option>
+            </select>
           </div>
 
           <div className="filter-group date-range">
@@ -449,6 +519,20 @@ function TrashIcon() {
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M4 3.5l.5 8h5l.5-8"
         stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function MicIcon({ listening }: { listening: boolean }) {
+  return listening ? (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="4" y="4" width="8" height="8" rx="2" fill="currentColor" />
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+      <rect x="5.5" y="1.5" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M2.5 8.5c0 2.76 2.24 5 5 5s5-2.24 5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="8" y1="13.5" x2="8" y2="15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </svg>
   )
 }

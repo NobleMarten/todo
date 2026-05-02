@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sort"
 	"strings"
 	"time"
@@ -37,7 +38,7 @@ func (s *TaskService) Add(title string) (model.Task, error) {
 	return s.repo.Create(title)
 }
 
-func (s *TaskService) List() ([]model.Task, error) {
+func (s *TaskService) List(ctx context.Context) ([]model.Task, error) {
 	return s.repo.List()
 }
 

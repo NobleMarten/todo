@@ -1,18 +1,35 @@
 package transport
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 	"todo/internal/model"
-	"todo/internal/service"
 )
+
+type TaskService interface {
+	List(ctx context.Context) ([]model.Task, error)
+	GetByID(id int) (model.Task, error)
+	Add(title string) (model.Task, error)
+	Delete(id int) (model.Task, error)
+	Update(id int, title string) (model.Task, error)
+	Done(id int) (model.Task, error)
+	Undone(id int) (model.Task, error)
+	Patch(id int, title *string, done *bool) (model.Task, error)
+	Clear() error
+	FilterByDate(tasks []model.Task, from, to time.Time) ([]model.Task, error)
+	FilterByDone(tasks []model.Task, done bool) ([]model.Task, error)
+	SortTasks(tasks []model.Task, sortBy string, order string) ([]model.Task, error)
+	Paginate(tasks []model.Task, limit, offset int) ([]model.Task, error)
+}
 
 // Handler представляет собой структуру, которая содержит ссылку на сервис TaskService.
 type Handler struct {
-	svc *service.TaskService // Поле svc хранит указатель на экземпляр TaskService.
+	svc TaskService // Поле svc хранит указатель на экземпляр TaskService.
 }
 
 type AddTodoRequest struct {
@@ -41,7 +58,7 @@ type ErrorResponse struct {
 }
 
 // NewHandler создает новый экземпляр Handler, принимая указатель на TaskService.
-func NewHandler(svc *service.TaskService) *Handler {
+func NewHandler(svc TaskService) *Handler {
 	// Возвращает указатель на новый экземпляр Handler, инициализированный переданным сервисом.
 	return &Handler{svc: svc} // *Handler означает, что функция возвращает указатель на Handler.
 }
@@ -80,12 +97,14 @@ func (h *Handler) Todos(w http.ResponseWriter, r *http.Request) { // (роути
 }
 
 func (h *Handler) GetTodos(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	tasks, err := h.svc.List()
+	tasks, err := h.svc.List(ctx)
 	if err != nil {
 		http.Error(w, "Failed to load tasks", http.StatusInternalServerError)
 		return

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
@@ -57,7 +58,8 @@ func main() {
 		fmt.Printf("added #%d: %s \n", t.ID, t.Title)
 
 	case "list":
-		tasks, err := svc.List()
+		ctx := context.Background()
+		tasks, err := svc.List(ctx)
 		if err != nil {
 			fmt.Println("error:", err)
 			return
