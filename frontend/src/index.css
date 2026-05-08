@@ -12,8 +12,8 @@
   --border2:   rgba(255,255,255,0.12);
   --text:      #e8e8f0;
   --muted:     #5a5a72;
-  --accent:    #4ade80;
-  --accent-dim: rgba(74, 222, 128, 0.12);
+  --accent:    #60a5fa;
+  --accent-dim: rgba(96, 165, 250, 0.10);
   --red:       #f87171;
   --red-dim:   rgba(248, 113, 113, 0.1);
   --radius:    8px;
@@ -255,6 +255,35 @@ body {
   50%       { opacity: 0.5; }
 }
 
+.priority-selector {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0 10px;
+  border-left: 1px solid var(--border);
+}
+
+/* input priority dots (add form) */
+.priority-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+  padding: 0;
+  opacity: 0.3;
+  background: none;
+}
+.priority-dot:hover { opacity: 0.7; transform: scale(1.15); }
+.priority-dot.active { opacity: 1; transform: scale(1.25); }
+.priority-high { background-color: #a78bfa; }
+.priority-medium { background-color: #60a5fa; }
+.priority-low { background-color: rgba(255,255,255,0.15); }
+.priority-dot.priority-high.active { box-shadow: 0 0 0 3px rgba(167,139,250,0.28); }
+.priority-dot.priority-medium.active { box-shadow: 0 0 0 3px rgba(96,165,250,0.28); }
+.priority-dot.priority-low.active { box-shadow: 0 0 0 3px rgba(255,255,255,0.1); }
+
 .add-error {
   margin-top: 6px;
   font-size: 12px;
@@ -265,6 +294,7 @@ body {
 
 /* ── filters ────────────────────────────────────────────────────────────────── */
 .filters {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -295,7 +325,7 @@ body {
 .filter-btn.active {
   background: var(--accent-dim);
   color: var(--accent);
-  border-color: rgba(74,222,128,0.3);
+  border-color: rgba(96,165,250,0.3);
 }
 
 .sort-select {
@@ -356,6 +386,66 @@ body {
 }
 .clear-date:hover { color: var(--red); }
 
+/* ── date toggle button ────────────────────────────────────────────────────── */
+.date-toggle-group {
+  position: relative;
+}
+
+.date-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.date-toggle-btn:hover {
+  color: var(--text);
+  border-color: var(--border2);
+}
+.date-toggle-btn.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: rgba(96,165,250,0.3);
+}
+.date-toggle-btn.has-dates {
+  color: var(--accent);
+  border-color: rgba(96,165,250,0.4);
+}
+
+.date-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.date-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  z-index: 50;
+  animation: slideIn 120ms ease;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  white-space: nowrap;
+}
+
 /* ── error bar ──────────────────────────────────────────────────────────────── */
 .error-bar {
   display: flex;
@@ -393,6 +483,7 @@ body {
 
 /* ── todo row ───────────────────────────────────────────────────────────────── */
 .todo-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -402,7 +493,49 @@ body {
   background: transparent;
   transition: background var(--transition), border-color var(--transition), opacity 280ms ease, transform 280ms ease;
   animation: rowIn 220ms ease both;
-  group: true;
+  overflow: hidden;
+}
+
+/* priority left bar */
+.priority-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border: none;
+  border-radius: var(--radius) 0 0 var(--radius);
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+  transition: width var(--transition), opacity var(--transition);
+  opacity: 0;
+}
+.todo-row:hover .priority-bar {
+  opacity: 1;
+  width: 4px;
+}
+.todo-row.priority-high .priority-bar {
+  background: #a78bfa;
+  opacity: 1;
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.45);
+}
+.todo-row.priority-medium .priority-bar {
+  background: #60a5fa;
+  opacity: 1;
+  box-shadow: 0 0 6px rgba(96, 165, 250, 0.35);
+}
+.todo-row.priority-low .priority-bar {
+  background: transparent;
+  opacity: 0;
+}
+.todo-row:hover.priority-low .priority-bar {
+  background: rgba(255,255,255,0.08);
+  opacity: 1;
+}
+.priority-bar:hover {
+  filter: brightness(1.15);
+  width: 5px !important;
 }
 
 .todo-row:hover {
@@ -477,6 +610,12 @@ body {
   word-break: break-word;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.todo-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .todo-date {
@@ -587,8 +726,19 @@ body {
 /* ── mobile ─────────────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .filters { gap: 6px; }
-  .filter-group.date-range { width: 100%; }
-  .date-input { flex: 1; width: auto; min-width: 0; }
+
+  /* Date dropdown: positions relative to .filters row, full width */
+  .date-toggle-group { position: static; }
+  .date-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    margin-top: 4px;
+    white-space: normal;
+    flex-wrap: wrap;
+  }
+  .date-dropdown .date-input { flex: 1; width: auto; min-width: 90px; }
 
   .del-btn { opacity: 1; }
 

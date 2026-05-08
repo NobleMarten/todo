@@ -50,7 +50,7 @@ func main() {
 		}
 
 		title := strings.Join(os.Args[2:], " ") //склеиваем все после add в одну строку
-		t, err := svc.Add(title)                //сервис добавляет задачу
+		t, err := svc.Add(title, "low")                //сервис добавляет задачу
 		if err != nil {
 			fmt.Println("error:", err)
 			return

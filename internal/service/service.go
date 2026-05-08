@@ -28,14 +28,18 @@ func ValidateTitle(title string) (string, error) {
 	return title, nil
 }
 
-func (s *TaskService) Add(title string) (model.Task, error) {
+func (s *TaskService) Add(title string, priority string) (model.Task, error) {
 
 	title, err := ValidateTitle(title)
 	if err != nil {
 		return model.Task{}, err
 	}
+	
+	if priority == "" {
+		priority = "low"
+	}
 
-	return s.repo.Create(title)
+	return s.repo.Create(title, priority)
 }
 
 func (s *TaskService) List(ctx context.Context) ([]model.Task, error) {
@@ -102,12 +106,12 @@ func (s *TaskService) Update(id int, title string) (model.Task, error) {
 	return s.repo.Update(id, title)
 }
 
-func (s *TaskService) Patch(id int, title *string, done *bool) (model.Task, error) {
+func (s *TaskService) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
 	if id <= 0 {
 		return model.Task{}, model.ErrInvalidID
 	}
 
-	if title == nil && done == nil {
+	if title == nil && done == nil && priority == nil {
 		return model.Task{}, model.ErrNothingToUpdate
 	}
 
@@ -115,7 +119,7 @@ func (s *TaskService) Patch(id int, title *string, done *bool) (model.Task, erro
 		ValidateTitle(*title)
 	}
 
-	return s.repo.Patch(id, title, done)
+	return s.repo.Patch(id, title, done, priority)
 }
 
 func (s *TaskService) Clear() error {
@@ -180,6 +184,20 @@ func (s *TaskService) SortTasks(tasks []model.Task, sortBy, order string) ([]mod
 				return tasks[i].CreatedAt.Before(tasks[j].CreatedAt)
 			} else {
 				return tasks[i].CreatedAt.After(tasks[j].CreatedAt)
+			}
+		})
+	case "priority":
+		priorityWeight := map[string]int{"high": 1, "medium": 2, "low": 3}
+		sort.Slice(tasks, func(i, j int) bool {
+			wI := priorityWeight[tasks[i].Priority]
+			if wI == 0 { wI = 3 }
+			wJ := priorityWeight[tasks[j].Priority]
+			if wJ == 0 { wJ = 3 }
+			
+			if order == "asc" {
+				return wI < wJ
+			} else {
+				return wI > wJ
 			}
 		})
 	}

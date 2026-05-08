@@ -86,6 +86,7 @@ export default function App() {
 
   // add
   const [input,    setInput]    = useState('')
+  const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('low')
   const [adding,   setAdding]   = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
 
@@ -97,6 +98,7 @@ export default function App() {
   const [deletingId,       setDeletingId]       = useState<number | null>(null)
   const [clearing,         setClearing]         = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [showDatePicker,   setShowDatePicker]   = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -126,10 +128,17 @@ export default function App() {
       let items = data.items ?? []
       if (filter === 'false') {
         items = items.filter(t => !t.done || isToday(t.done_at))
-        // Сортируем: выполненные (done: true) идут вверх
+        // Сортируем: выполненные (done: true) идут вниз
+        // Затем сортируем по приоритету (high -> medium -> low)
+        const pWeight = { high: 1, medium: 2, low: 3 }
         items.sort((a, b) => {
-          if (a.done === b.done) return 0
-          return a.done ? -1 : 1
+          if (a.done !== b.done) return a.done ? 1 : -1
+          
+          const aW = pWeight[a.priority as keyof typeof pWeight] || 3
+          const bW = pWeight[b.priority as keyof typeof pWeight] || 3
+          if (aW !== bW) return aW - bW
+          
+          return 0
         })
       }
       setTodos(items)
@@ -153,8 +162,9 @@ export default function App() {
     setAdding(true)
     setAddError(null)
     try {
-      await addTodo(title)
+      await addTodo(title, priority)
       setInput('')
+      setPriority('low')
       await load()
       inputRef.current?.focus()
     } catch (e: unknown) {
@@ -229,6 +239,16 @@ export default function App() {
   function cancelEdit() {
     setEditId(null)
     setEditVal('')
+  }
+
+  async function updatePriority(id: number, newPriority: string) {
+    setTodos(prev => prev.map(t => t.id === id ? { ...t, priority: newPriority as any } : t))
+    try {
+      await patchTodo(id, { priority: newPriority })
+      await load()
+    } catch {
+      await load() // revert on fail
+    }
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -306,6 +326,17 @@ export default function App() {
             >
               <MicIcon listening={listening} />
             </button>
+            <div className="priority-selector">
+              {(['high', 'medium', 'low'] as const).map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`priority-dot priority-${p} ${priority === p ? 'active' : ''}`}
+                  onClick={() => setPriority(p)}
+                  title={`Приоритет: ${p}`}
+                />
+              ))}
+            </div>
             <button
               className={`add-btn ${adding ? 'loading' : ''}`}
               onClick={handleAdd}
@@ -340,33 +371,47 @@ export default function App() {
             >
               <option value="">без сортировки</option>
               <option value="create_date">по дате</option>
+              <option value="priority">по приоритету</option>
             </select>
           </div>
 
-          <div className="filter-group date-range">
-            <input
-              type="date"
-              className="date-input"
-              value={from}
-              onChange={e => setFrom(e.target.value)}
-              title="С даты"
-            />
-            <span className="date-sep">—</span>
-            <input
-              type="date"
-              className="date-input"
-              value={to}
-              onChange={e => setTo(e.target.value)}
-              title="По дату"
-            />
-            {(from || to) && (
-              <button
-                className="clear-date"
-                onClick={() => { setFrom(''); setTo('') }}
-                title="Сбросить даты"
-              >
-                ×
-              </button>
+          <div className="filter-group date-toggle-group">
+            <button
+              className={`date-toggle-btn ${showDatePicker ? 'active' : ''} ${(from || to) ? 'has-dates' : ''}`}
+              onClick={() => setShowDatePicker(v => !v)}
+              title="Фильтр по дате"
+            >
+              <CalendarIcon />
+              {(from || to) && <span className="date-badge" />}
+            </button>
+
+            {showDatePicker && (
+              <div className="date-dropdown">
+                <input
+                  type="date"
+                  className="date-input"
+                  value={from}
+                  onChange={e => setFrom(e.target.value)}
+                  title="С даты"
+                />
+                <span className="date-sep">—</span>
+                <input
+                  type="date"
+                  className="date-input"
+                  value={to}
+                  onChange={e => setTo(e.target.value)}
+                  title="По дату"
+                />
+                {(from || to) && (
+                  <button
+                    className="clear-date"
+                    onClick={() => { setFrom(''); setTo('') }}
+                    title="Сбросить даты"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -407,6 +452,7 @@ export default function App() {
                 onEditChange={setEditVal}
                 onEditCommit={() => commitEdit(todo.id)}
                 onEditCancel={cancelEdit}
+                onPriorityChange={(p) => updatePriority(todo.id, p)}
               />
             ))
           )}
@@ -430,11 +476,12 @@ interface RowProps {
   onEditChange:  (v: string) => void
   onEditCommit:  () => void
   onEditCancel:  () => void
+  onPriorityChange: (p: string) => void
 }
 
 function TodoRow({
   todo, index, isDeleting, isEditing, editVal,
-  onToggle, onDelete, onStartEdit, onEditChange, onEditCommit, onEditCancel,
+  onToggle, onDelete, onStartEdit, onEditChange, onEditCommit, onEditCancel, onPriorityChange
 }: RowProps) {
   const editRef = useRef<HTMLInputElement>(null)
 
@@ -444,18 +491,21 @@ function TodoRow({
 
   return (
     <div
-      className={`todo-row ${todo.done ? 'done' : ''} ${isDeleting ? 'deleting' : ''}`}
+      className={`todo-row ${todo.done ? 'done' : ''} ${isDeleting ? 'deleting' : ''} priority-${todo.priority || 'low'}`}
       style={{ animationDelay: `${index * 40}ms` }}
     >
       <button
-        className="check-btn"
-        onClick={onToggle}
-        title={todo.done ? 'Отметить активным' : 'Отметить выполненным'}
-      >
-        <span className="check-box">
-          {todo.done ? <CheckIcon /> : null}
-        </span>
-      </button>
+        className="priority-bar"
+        onClick={() => {
+          const p = todo.priority || 'low'
+          const next = p === 'high' ? 'medium' : p === 'medium' ? 'low' : 'high'
+          onPriorityChange(next)
+        }}
+        title={`Приоритет: ${
+          (todo.priority || 'low') === 'high' ? 'срочно' :
+          (todo.priority || 'low') === 'medium' ? 'важно' : 'перспектива'
+        } — нажми для смены`}
+      />
 
       <div className="todo-content">
         {isEditing ? (
@@ -479,10 +529,22 @@ function TodoRow({
             {todo.title}
           </span>
         )}
-        {todo.created_at && (
-          <span className="todo-date">{formatDate(todo.created_at)}</span>
-        )}
+        <div className="todo-meta">
+          {todo.created_at && (
+            <span className="todo-date">{formatDate(todo.created_at)}</span>
+          )}
+        </div>
       </div>
+
+      <button
+        className="check-btn"
+        onClick={onToggle}
+        title={todo.done ? 'Отметить активным' : 'Отметить выполненным'}
+      >
+        <span className="check-box">
+          {todo.done ? <CheckIcon /> : null}
+        </span>
+      </button>
 
       <button className="del-btn" onClick={onDelete} title="Удалить">
         <TrashIcon />
@@ -524,6 +586,16 @@ function TrashIcon() {
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 0 1 .5-.5h2a.5.5 0 0 1 .5.5v1M4 3.5l.5 8h5l.5-8"
         stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+      <rect x="1.5" y="2.5" width="11" height="10" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M1.5 5.5h11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M4.5 1v3M9.5 1v3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   )
 }

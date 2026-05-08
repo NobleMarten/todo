@@ -31,7 +31,7 @@ func (fr *FakeRepo) Save(tasks []model.Task) error {
 	return nil
 }
 
-func (fr *FakeRepo) Create(title string) (model.Task, error) {
+func (fr *FakeRepo) Create(title string, priority string) (model.Task, error) {
 	nextID := 1
 	for _, task := range fr.Tasks {
 		if task.ID >= nextID {
@@ -40,9 +40,10 @@ func (fr *FakeRepo) Create(title string) (model.Task, error) {
 	}
 
 	newTask := model.Task{
-		ID:    nextID,
-		Title: title,
-		Done:  false,
+		ID:       nextID,
+		Title:    title,
+		Done:     false,
+		Priority: priority,
 	}
 
 	fr.Tasks = append(fr.Tasks, newTask)
@@ -114,7 +115,7 @@ func (fr *FakeRepo) Update(id int, title string) (model.Task, error) {
 	return model.Task{}, model.ErrNotFound
 }
 
-func (fr *FakeRepo) Patch(id int, title *string, done *bool) (model.Task, error) {
+func (fr *FakeRepo) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
 	for i, ts := range fr.Tasks {
 		if ts.ID == id {
 			if title != nil {
@@ -132,6 +133,9 @@ func (fr *FakeRepo) Patch(id int, title *string, done *bool) (model.Task, error)
 						return model.Task{}, err
 					}
 				}
+			}
+			if priority != nil {
+				fr.Tasks[i].Priority = *priority
 			}
 			return fr.Tasks[i], nil
 		}

@@ -14,12 +14,12 @@ import (
 type TaskService interface {
 	List(ctx context.Context) ([]model.Task, error)
 	GetByID(id int) (model.Task, error)
-	Add(title string) (model.Task, error)
+	Add(title string, priority string) (model.Task, error)
 	Delete(id int) (model.Task, error)
 	Update(id int, title string) (model.Task, error)
 	Done(id int) (model.Task, error)
 	Undone(id int) (model.Task, error)
-	Patch(id int, title *string, done *bool) (model.Task, error)
+	Patch(id int, title *string, done *bool, priority *string) (model.Task, error)
 	Clear() error
 	FilterByDate(tasks []model.Task, from, to time.Time) ([]model.Task, error)
 	FilterByDone(tasks []model.Task, done bool) ([]model.Task, error)
@@ -33,7 +33,8 @@ type Handler struct {
 }
 
 type AddTodoRequest struct {
-	Title string `json:"title"`
+	Title    string `json:"title"`
+	Priority string `json:"priority,omitempty"`
 }
 
 type UpdateTodoRequest struct {
@@ -41,8 +42,9 @@ type UpdateTodoRequest struct {
 }
 
 type PatchTodoRequest struct {
-	Title *string `json:"title,omitempty"`
-	Done  *bool   `json:"done,omitempty"`
+	Title    *string `json:"title,omitempty"`
+	Done     *bool   `json:"done,omitempty"`
+	Priority *string `json:"priority,omitempty"`
 }
 
 type ListToDosResponse struct {
@@ -241,7 +243,7 @@ func (h *Handler) PostTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.svc.Add(req.Title)
+	task, err := h.svc.Add(req.Title, req.Priority)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -399,7 +401,7 @@ func (h *Handler) PatchTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.svc.Patch(id, req.Title, req.Done)
+	task, err := h.svc.Patch(id, req.Title, req.Done, req.Priority)
 	if err != nil {
 		WriteError(w, err)
 		return

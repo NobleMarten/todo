@@ -4,6 +4,8 @@ import (
 	"os"
 	"time"
 	"todo/internal/model"
+
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -14,6 +16,11 @@ type Config struct {
 }
 
 func Load() (Config, error) {
+	// пытаемся загрузить .env, игнорируем ошибку, если файла нет (например, в проде)
+	if err := godotenv.Load(".envlocal"); err != nil {
+		_ = godotenv.Load(".env")
+	}
+
 	var cfg Config
 
 	cfg.Env = getEnv("ENV", "local")  // берем значение из переменной окружения ENV, если не задано - используем local

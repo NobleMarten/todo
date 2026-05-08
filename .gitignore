@@ -1,2 +1,4 @@
 api-test/
 deploy-frontend.sh
+.env
+.envlocal

@@ -50,7 +50,7 @@ func TestAdd(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	task, err := service.Add("Second Task")
+	task, err := service.Add("Second Task", "low")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestPatch_Success(t *testing.T) {
 	}
 	newTitle := "Updated Task"
 	setTrue := true
-	task, err := service.Patch(1, &newTitle, &setTrue)
+	task, err := service.Patch(1, &newTitle, &setTrue, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -476,7 +476,7 @@ func TestPatch_NothingToUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	_, err = service.Patch(1, nil, nil)
+	_, err = service.Patch(1, nil, nil, nil)
 	if !errors.Is(err, model.ErrNothingToUpdate) {
 		t.Fatalf("expected ErrNothingToUpdate, got %v", err)
 	}
@@ -488,7 +488,7 @@ func TestPatch_InvalidID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	_, err = service.Patch(0, nil, nil)
+	_, err = service.Patch(0, nil, nil, nil)
 	if !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("expected ErrInvalidID, got %v", err)
 	}
@@ -501,7 +501,7 @@ func TestPatch_Title(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	newTitle := "Patched Title"
-	task, err := service.Patch(1, &newTitle, nil)
+	task, err := service.Patch(1, &newTitle, nil, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestPatch_Done(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	newTrue := true
-	task, err := service.Patch(1, nil, &newTrue)
+	task, err := service.Patch(1, nil, &newTrue, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

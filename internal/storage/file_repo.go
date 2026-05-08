@@ -6,14 +6,14 @@ import (
 )
 
 type RepoStorage interface {
-	Create(title string) (model.Task, error)
+	Create(title string, priority string) (model.Task, error)
 	GetByID(id int) (model.Task, error)
 	List() ([]model.Task, error)
 	Update(id int, title string) (model.Task, error)
 	Done(id int) (model.Task, error)
 	Undone(id int) (model.Task, error)
 	Delete(id int) (model.Task, error)
-	Patch(id int, title *string, done *bool) (model.Task, error)
+	Patch(id int, title *string, done *bool, priority *string) (model.Task, error)
 	Clear() error
 }
 
@@ -26,7 +26,7 @@ func NewFileRepo(path string) *FileRepo {
 	return &FileRepo{fs: NewFileStorage(path)}
 }
 
-func (fr *FileRepo) Create(title string) (model.Task, error) {
+func (fr *FileRepo) Create(title string, priority string) (model.Task, error) {
 	tasks, err := fr.fs.Load()
 	if err != nil {
 		return model.Task{}, err
@@ -43,6 +43,7 @@ func (fr *FileRepo) Create(title string) (model.Task, error) {
 		ID:        nextID,
 		Title:     title,
 		Done:      false,
+		Priority:  priority,
 		CreatedAt: time.Now(),
 	}
 
@@ -145,7 +146,7 @@ func (fr *FileRepo) Update(id int, title string) (model.Task, error) {
 	return model.Task{}, nil
 }
 
-func (fr *FileRepo) Patch(id int, title *string, done *bool) (model.Task, error) {
+func (fr *FileRepo) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
 	tasks, err := fr.fs.Load()
 	if err != nil {
 		return model.Task{}, err
@@ -168,6 +169,9 @@ func (fr *FileRepo) Patch(id int, title *string, done *bool) (model.Task, error)
 						return model.Task{}, err
 					}
 				}
+			}
+			if priority != nil {
+				tasks[i].Priority = *priority
 			}
 			if err := fr.fs.Save(tasks); err != nil {
 				return ts, err
