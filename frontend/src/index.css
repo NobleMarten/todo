@@ -16,9 +16,9 @@
   --accent-dim: rgba(96, 165, 250, 0.10);
   --red:       #f87171;
   --red-dim:   rgba(248, 113, 113, 0.1);
-  /* priority scale — warm = urgent */
-  --p-high:    #f59e0b;
-  --p-high-dim: rgba(245, 158, 11, 0.28);
+  /* priority scale */
+  --p-high:    #a78bfa;
+  --p-high-dim: rgba(167, 139, 250, 0.28);
   --p-medium:  #60a5fa;
   --p-medium-dim: rgba(96, 165, 250, 0.28);
   --p-low:     rgba(255,255,255,0.15);
@@ -41,8 +41,8 @@
   --accent-dim: rgba(37, 99, 235, 0.10);
   --red:       #dc2626;
   --red-dim:   rgba(220, 38, 38, 0.10);
-  --p-high:    #ea580c;
-  --p-high-dim: rgba(234, 88, 12, 0.22);
+  --p-high:    #7c3aed;
+  --p-high-dim: rgba(124, 58, 237, 0.22);
   --p-medium:  #2563eb;
   --p-medium-dim: rgba(37, 99, 235, 0.22);
   --p-low:     rgba(15,18,30,0.18);
@@ -246,42 +246,6 @@ body {
 }
 
 .add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-.mic-btn {
-  flex-shrink: 0;
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background var(--transition), color var(--transition);
-}
-
-.mic-btn:hover {
-  background: var(--accent-dim);
-  color: var(--accent);
-}
-
-.mic-btn.active {
-  color: var(--red);
-  background: var(--red-dim);
-  animation: pulse-mic 1s ease-in-out infinite;
-}
-
-.add-input-wrap.is-listening {
-  border-color: var(--red);
-  box-shadow: 0 0 0 3px var(--red-dim);
-}
-
-@keyframes pulse-mic {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.5; }
-}
 
 .priority-selector {
   display: flex;

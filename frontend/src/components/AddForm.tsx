@@ -1,7 +1,6 @@
 import { useState, type RefObject } from 'react'
-import { useSpeech } from '../hooks/useSpeech'
 import type { Priority } from '../lib/format'
-import { MicIcon, PlusIcon, SpinIcon } from './icons'
+import { PlusIcon, SpinIcon } from './icons'
 
 interface Props {
   inputRef: RefObject<HTMLInputElement | null>
@@ -15,12 +14,6 @@ export function AddForm({ inputRef, onAdd }: Props) {
   const [priority, setPriority] = useState<Priority>('low')
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const { listening, supported, start, stop } = useSpeech((text) => {
-    setInput(text)
-    setError(null)
-    setTimeout(() => inputRef.current?.focus(), 50)
-  })
 
   async function handleAdd() {
     const title = input.trim()
@@ -41,12 +34,12 @@ export function AddForm({ inputRef, onAdd }: Props) {
 
   return (
     <div className="add-form">
-      <div className={`add-input-wrap ${error ? 'has-error' : ''} ${listening ? 'is-listening' : ''}`}>
+      <div className={`add-input-wrap ${error ? 'has-error' : ''}`}>
         <span className="prompt" aria-hidden="true">›</span>
         <input
           ref={inputRef}
           className="add-input"
-          placeholder={listening ? 'слушаю...' : 'новая задача...'}
+          placeholder="новая задача..."
           aria-label="Новая задача"
           value={input}
           onChange={(e) => {
@@ -57,18 +50,6 @@ export function AddForm({ inputRef, onAdd }: Props) {
           disabled={adding}
           autoFocus
         />
-
-        {supported && (
-          <button
-            className={`mic-btn ${listening ? 'active' : ''}`}
-            onClick={listening ? stop : start}
-            aria-label={listening ? 'Остановить запись' : 'Голосовой ввод'}
-            aria-pressed={listening}
-            type="button"
-          >
-            <MicIcon listening={listening} />
-          </button>
-        )}
 
         <div className="priority-selector" role="group" aria-label="Приоритет новой задачи">
           {PRIORITIES.map((p) => (
