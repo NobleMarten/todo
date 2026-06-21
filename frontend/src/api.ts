@@ -20,7 +20,8 @@ export type ErrorResponse = {
 }
 
 export type FilterDone = 'all' | 'true' | 'false'
-export type SortField = 'id' | 'date' | 'create_date'
+// Matches the backend SortTasks switch (service.go): id | title | created_at | priority
+export type SortField = 'id' | 'title' | 'created_at' | 'priority'
 
 export interface FetchParams {
   done?: FilterDone
