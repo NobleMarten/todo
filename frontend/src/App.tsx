@@ -5,7 +5,7 @@ import { useTheme } from './hooks/useTheme'
 import { isToday, sortTasks } from './lib/format'
 import { AddForm } from './components/AddForm'
 import { Filters } from './components/Filters'
-import { ActiveList, CompletedSection, type RowHandlers } from './components/lists'
+import { ActiveList, type RowHandlers } from './components/lists'
 import { MoonIcon, SunIcon } from './components/icons'
 import './index.css'
 
@@ -37,15 +37,19 @@ export default function App() {
   }, [])
 
   // ── derive active / completed lists ─────────────────────────────────────────
-  const { activeTasks, doneTasks, doneOnly } = useMemo(() => {
+  const { activeTasks, doneTop, doneOnly } = useMemo(() => {
     const doneOnly = t.filter === 'true'
     const active = t.todos.filter((x) => !x.done)
     let done = t.todos.filter((x) => x.done)
     // "активные" view keeps only tasks completed today, to show daily progress
     if (t.filter === 'false') done = done.filter((x) => isToday(x.done_at))
+    // completed shown on top, most recently finished first
+    done = [...done].sort(
+      (a, b) => new Date(b.done_at ?? 0).getTime() - new Date(a.done_at ?? 0).getTime(),
+    )
 
     const activeOrdered = t.sort ? sortTasks(active, t.sort) : applyManualOrder(active, t.order)
-    return { activeTasks: activeOrdered, doneTasks: done, doneOnly }
+    return { activeTasks: activeOrdered, doneTop: done, doneOnly }
   }, [t.todos, t.filter, t.sort, t.order])
 
   const doneCount = useMemo(() => t.todos.filter((x) => x.done).length, [t.todos])
@@ -196,23 +200,30 @@ export default function App() {
             </span>
           </div>
         ) : doneOnly ? (
-          <ActiveList tasks={doneTasks} draggable={false} onReorder={onReorder} handlers={handlers} />
+          <ActiveList tasks={doneTop} draggable={false} onReorder={onReorder} handlers={handlers} />
         ) : (
           <>
-            {activeTasks.length === 0 && doneTasks.length === 0 ? (
-              <div className="empty">
-                <span className="empty-icon">✓</span>
-                <span className="empty-title">на сегодня всё</span>
-              </div>
-            ) : (
+            {doneTop.length > 0 && (
+              <section className="done-group">
+                <div className="done-label">
+                  выполнено{t.filter === 'false' ? ' сегодня' : ''} · {doneTop.length}
+                </div>
+                <ActiveList tasks={doneTop} draggable={false} onReorder={onReorder} handlers={handlers} />
+              </section>
+            )}
+            {activeTasks.length > 0 ? (
               <ActiveList
                 tasks={activeTasks}
                 draggable={t.sort === ''}
                 onReorder={onReorder}
                 handlers={handlers}
               />
-            )}
-            <CompletedSection tasks={doneTasks} handlers={handlers} />
+            ) : doneTop.length === 0 ? (
+              <div className="empty">
+                <span className="empty-icon">✓</span>
+                <span className="empty-title">на сегодня всё</span>
+              </div>
+            ) : null}
           </>
         )}
 

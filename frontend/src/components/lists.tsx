@@ -1,8 +1,7 @@
-import { useState } from 'react'
 import { Reorder, useDragControls } from 'framer-motion'
 import type { Task } from '../api'
 import { TodoRow } from './TodoRow'
-import { ChevronIcon, GripIcon } from './icons'
+import { GripIcon } from './icons'
 
 export interface RowHandlers {
   editId: number | null
@@ -82,28 +81,5 @@ export function ActiveList({
         <div key={t.id}>{row(t, handlers)}</div>
       ))}
     </div>
-  )
-}
-
-/** Collapsible "Выполнено" section. */
-export function CompletedSection({ tasks, handlers }: { tasks: Task[]; handlers: RowHandlers }) {
-  const [open, setOpen] = useState(false)
-  if (tasks.length === 0) return null
-
-  return (
-    <section className="completed-section">
-      <button className="section-header" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <ChevronIcon open={open} />
-        <span className="section-title">выполнено</span>
-        <span className="section-count">{tasks.length}</span>
-      </button>
-      {open && (
-        <div className="todo-list">
-          {tasks.map((t) => (
-            <div key={t.id}>{row(t, handlers)}</div>
-          ))}
-        </div>
-      )}
-    </section>
   )
 }

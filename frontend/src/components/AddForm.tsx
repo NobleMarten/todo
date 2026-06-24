@@ -1,5 +1,5 @@
 import { useState, type RefObject } from 'react'
-import type { Priority } from '../lib/format'
+import { PRIORITY_LABEL, type Priority } from '../lib/format'
 import { PlusIcon, SpinIcon } from './icons'
 
 interface Props {
@@ -51,19 +51,6 @@ export function AddForm({ inputRef, onAdd }: Props) {
           autoFocus
         />
 
-        <div className="priority-selector" role="group" aria-label="Приоритет новой задачи">
-          {PRIORITIES.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={`priority-dot priority-${p} ${priority === p ? 'active' : ''}`}
-              onClick={() => setPriority(p)}
-              aria-label={`Приоритет: ${p}`}
-              aria-pressed={priority === p}
-            />
-          ))}
-        </div>
-
         <button
           className={`add-btn ${adding ? 'loading' : ''}`}
           onClick={handleAdd}
@@ -74,6 +61,21 @@ export function AddForm({ inputRef, onAdd }: Props) {
           {adding ? <SpinIcon /> : <PlusIcon />}
         </button>
       </div>
+
+      <div className="priority-segment" role="group" aria-label="Приоритет новой задачи">
+        {PRIORITIES.map((p) => (
+          <button
+            key={p}
+            type="button"
+            className={`seg seg-${p} ${priority === p ? 'active' : ''}`}
+            onClick={() => setPriority(p)}
+            aria-pressed={priority === p}
+          >
+            {PRIORITY_LABEL[p]}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="add-error" role="alert">{error}</p>}
     </div>
   )

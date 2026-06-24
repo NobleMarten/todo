@@ -247,34 +247,34 @@ body {
 
 .add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-.priority-selector {
+/* ── priority segmented control (add form) ──────────────────────────────────── */
+.priority-segment {
   display: flex;
-  gap: 4px;
-  align-items: center;
-  padding: 0 10px;
-  border-left: 1px solid var(--border);
+  margin-top: 8px;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
 }
 
-/* input priority dots (add form) */
-.priority-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid transparent;
+.seg {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  padding: 6px 16px;
+  background: transparent;
+  border: none;
+  border-right: 1px solid var(--border);
+  color: var(--muted);
   cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-  padding: 0;
-  opacity: 0.3;
-  background: none;
+  transition: background var(--transition), color var(--transition);
 }
-.priority-dot:hover { opacity: 0.7; transform: scale(1.15); }
-.priority-dot.active { opacity: 1; transform: scale(1.25); }
-.priority-high { background-color: var(--p-high); }
-.priority-medium { background-color: var(--p-medium); }
-.priority-low { background-color: var(--p-low); }
-.priority-dot.priority-high.active { box-shadow: 0 0 0 3px var(--p-high-dim); }
-.priority-dot.priority-medium.active { box-shadow: 0 0 0 3px var(--p-medium-dim); }
-.priority-dot.priority-low.active { box-shadow: 0 0 0 3px var(--border2); }
+.seg:last-child { border-right: none; }
+.seg:hover { color: var(--text); background: var(--surface); }
+.seg.active { color: var(--text); }
+.seg.seg-high.active { background: var(--p-high-dim); color: var(--p-high); }
+.seg.seg-medium.active { background: var(--p-medium-dim); color: var(--p-medium); }
+.seg.seg-low.active { background: var(--surface2); }
 
 .add-error {
   margin-top: 6px;
@@ -736,33 +736,24 @@ body {
   .drag-handle { opacity: 0.5; }
 }
 
-/* ── completed section ──────────────────────────────────────────────────────── */
-.completed-section { margin-top: 14px; }
+/* ── completed group (shown on top) ─────────────────────────────────────────── */
+.done-group { margin-bottom: 10px; }
 
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 6px 4px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
+.done-label {
+  padding: 2px 4px 8px;
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
+  font-size: 10px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  transition: color var(--transition);
-}
-.section-header:hover { color: var(--text); }
-.section-title { flex: 1; text-align: left; }
-.section-count {
-  font-variant-numeric: tabular-nums;
-  padding: 1px 7px;
-  border-radius: 999px;
-  background: var(--surface2);
   color: var(--muted);
+  opacity: 0.7;
+}
+
+/* visually separate completed (top) from active tasks below */
+.done-group + .todo-list {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border);
 }
 
 /* ── hint footer ────────────────────────────────────────────────────────────── */

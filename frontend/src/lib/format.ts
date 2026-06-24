@@ -26,7 +26,7 @@ export function priorityWeight(p?: string): number {
 export const PRIORITY_LABEL: Record<string, string> = {
   high: 'срочно',
   medium: 'важно',
-  low: 'перспектива',
+  low: 'обычно',
 }
 
 export type Priority = 'high' | 'medium' | 'low'

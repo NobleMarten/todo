@@ -57,21 +57,6 @@ export function MoonIcon() {
   )
 }
 
-export function ChevronIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      aria-hidden="true"
-      style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 160ms ease' }}
-    >
-      <path d="M4 2.5L8 6l-4 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
 export function GripIcon() {
   return (
     <svg width="10" height="16" viewBox="0 0 10 16" fill="none" aria-hidden="true">

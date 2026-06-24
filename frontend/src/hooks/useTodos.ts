@@ -45,7 +45,7 @@ export function useTodos() {
   const [error, setError] = useState<string | null>(null)
 
   const [filter, setFilter] = useState<FilterDone>('false')
-  const [sort, setSort] = useState<Sort>('')
+  const [sort, setSort] = useState<Sort>('priority')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
