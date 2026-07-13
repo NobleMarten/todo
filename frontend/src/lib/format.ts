@@ -17,6 +17,11 @@ export function isToday(iso?: string | null): boolean {
   )
 }
 
+/** A task is "на сегодня" when its daily_date (if any) falls on the current day. */
+export function isDailyTask(task: Task): boolean {
+  return isToday(task.daily_date)
+}
+
 export const PRIORITY_WEIGHT: Record<string, number> = { high: 1, medium: 2, low: 3 }
 
 export function priorityWeight(p?: string): number {

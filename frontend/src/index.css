@@ -653,6 +653,36 @@ body {
   background: var(--red-dim);
 }
 
+/* ── daily ("на сегодня") toggle ────────────────────────────────────────────── */
+.daily-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition), color var(--transition), background var(--transition);
+}
+/* reveal on row hover, same as the delete button */
+.todo-row:hover .daily-btn { opacity: 0.75; }
+.daily-btn:hover { color: var(--accent); background: var(--accent-dim); }
+/* when the task is daily, keep it visible and accented */
+.daily-btn.active { opacity: 1; color: var(--accent); }
+.todo-row:hover .daily-btn.active { opacity: 1; }
+@media (hover: none) {
+  .daily-btn { opacity: 0.6; }
+  .daily-btn.active { opacity: 1; }
+}
+
+/* subtle accent tint on rows that are "на сегодня" */
+.todo-row.daily:hover { background: var(--accent-dim); }
+
 /* ── skeleton ───────────────────────────────────────────────────────────────── */
 .skeleton-wrap { display: flex; flex-direction: column; gap: 2px; }
 
@@ -749,8 +779,24 @@ body {
   opacity: 0.7;
 }
 
-/* visually separate completed (top) from active tasks below */
-.done-group + .todo-list {
+/* ── active sections («на сегодня» / «задачи») ──────────────────────────────── */
+.section-group { margin-bottom: 10px; }
+.section-group:last-of-type { margin-bottom: 0; }
+
+.section-label {
+  padding: 2px 4px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
+}
+.section-label.section-today { color: var(--accent); opacity: 0.85; }
+
+/* dashed divider between stacked groups (completed → sections → sections) */
+.done-group + .section-group,
+.section-group + .section-group {
   margin-top: 10px;
   padding-top: 12px;
   border-top: 1px dashed var(--border);

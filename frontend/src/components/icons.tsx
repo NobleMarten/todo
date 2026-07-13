@@ -57,6 +57,20 @@ export function MoonIcon() {
   )
 }
 
+export function DailyStarIcon({ filled }: { filled?: boolean }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path
+        d="M8 1.7l1.9 3.86 4.26.62-3.08 3 .73 4.24L8 11.42 4.18 13.42l.73-4.24-3.08-3 4.26-.62z"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 export function GripIcon() {
   return (
     <svg width="10" height="16" viewBox="0 0 10 16" fill="none" aria-hidden="true">

@@ -9,4 +9,5 @@ type Task struct {
 	Priority  string     `json:"priority"`
 	CreatedAt time.Time  `json:"created_at"`
 	DoneAt    *time.Time `json:"done_at,omitempty"`
+	DailyDate *time.Time `json:"daily_date"`
 }

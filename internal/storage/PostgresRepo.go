@@ -23,6 +23,7 @@ func NewPostgresRepo(connStr string) (*PostgresRepo, error) {
 
 	// Ensure priority column exists
 	_, err = db.Exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority VARCHAR(10) DEFAULT 'low'")
+	_, err = db.Exec("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS daily DATE")
 	if err != nil {
 		return nil, err
 	}
@@ -31,16 +32,16 @@ func NewPostgresRepo(connStr string) (*PostgresRepo, error) {
 }
 
 func (pr *PostgresRepo) Create(title string, priority string) (model.Task, error) {
-	row := pr.db.QueryRow("INSERT INTO tasks (title, done, priority, created_at) VALUES ($1, false, $2, NOW()) RETURNING id, title, done, priority, created_at, done_at", title, priority)
+	row := pr.db.QueryRow("INSERT INTO tasks (title, done, priority, created_at) VALUES ($1, false, $2, NOW()) RETURNING id, title, done, priority, created_at, done_at, daily", title, priority)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 }
 
 func (pr *PostgresRepo) List() ([]model.Task, error) {
-	rows, err := pr.db.Query("SELECT id, title, done, priority, created_at, done_at FROM tasks ORDER BY id")
+	rows, err := pr.db.Query("SELECT id, title, done, priority, created_at, done_at, daily FROM tasks ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +49,7 @@ func (pr *PostgresRepo) List() ([]model.Task, error) {
 	var tasks []model.Task
 	for rows.Next() {
 		var task model.Task
-		if err := rows.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+		if err := rows.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 			return nil, err
 		}
 		tasks = append(tasks, task)
@@ -57,29 +58,29 @@ func (pr *PostgresRepo) List() ([]model.Task, error) {
 }
 
 func (pr *PostgresRepo) GetByID(id int) (model.Task, error) {
-	row := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at FROM tasks WHERE id = $1", id)
+	row := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at, daily FROM tasks WHERE id = $1", id)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 }
 
 func (pr *PostgresRepo) Update(id int, title string) (model.Task, error) {
-	row := pr.db.QueryRow("UPDATE tasks SET title = $1 WHERE id = $2 RETURNING id, title, done, priority, created_at, done_at", title, id)
+	row := pr.db.QueryRow("UPDATE tasks SET title = $1 WHERE id = $2 RETURNING id, title, done, priority, created_at, done_at, daily", title, id)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 }
 
 func (pr *PostgresRepo) Done(id int) (model.Task, error) {
-	row := pr.db.QueryRow("UPDATE tasks SET done = true, done_at = NOW() WHERE id = $1 AND done = false RETURNING id, title, done, priority, created_at, done_at", id)
+	row := pr.db.QueryRow("UPDATE tasks SET done = true, done_at = NOW() WHERE id = $1 AND done = false RETURNING id, title, done, priority, created_at, done_at, daily", id)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
-		row2 := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at FROM tasks WHERE id = $1", id)
-		err := row2.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt)
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
+		row2 := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at, daily FROM tasks WHERE id = $1", id)
+		err := row2.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate)
 		if err == sql.ErrNoRows {
 			return model.Task{}, model.ErrNotFound
 		}
@@ -94,11 +95,11 @@ func (pr *PostgresRepo) Done(id int) (model.Task, error) {
 }
 
 func (pr *PostgresRepo) Undone(id int) (model.Task, error) {
-	row := pr.db.QueryRow("UPDATE tasks SET done = false, done_at = NULL WHERE id = $1 AND done = true RETURNING id, title, done, priority, created_at, done_at", id)
+	row := pr.db.QueryRow("UPDATE tasks SET done = false, done_at = NULL WHERE id = $1 AND done = true RETURNING id, title, done, priority, created_at, done_at, daily", id)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
-		row2 := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at FROM tasks WHERE id = $1", id)
-		err := row2.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt)
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
+		row2 := pr.db.QueryRow("SELECT id, title, done, priority, created_at, done_at, daily FROM tasks WHERE id = $1", id)
+		err := row2.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate)
 		if err == sql.ErrNoRows {
 			return model.Task{}, model.ErrNotFound
 		}
@@ -113,16 +114,16 @@ func (pr *PostgresRepo) Undone(id int) (model.Task, error) {
 }
 
 func (pr *PostgresRepo) Delete(id int) (model.Task, error) {
-	row := pr.db.QueryRow("DELETE FROM TASKS WHERE id = $1 RETURNING id, title, done, priority, created_at, done_at", id)
+	row := pr.db.QueryRow("DELETE FROM TASKS WHERE id = $1 RETURNING id, title, done, priority, created_at, done_at, daily", id)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 
 }
 
-func (pr *PostgresRepo) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
+func (pr *PostgresRepo) Patch(id int, title *string, done *bool, priority *string, daily *bool) (model.Task, error) {
 	if title != nil {
 		if *title == "" {
 			return model.Task{}, model.ErrEmptyTitle
@@ -137,13 +138,18 @@ func (pr *PostgresRepo) Patch(id int, title *string, done *bool, priority *strin
 			WHEN $2 = true THEN NOW()
 			WHEN $2 = false THEN NULL
 			else done_at
+		END,
+		daily = CASE
+			WHEN $5 = true THEN CURRENT_DATE
+			WHEN $5 = false THEN NULL
+			else daily
 		END
 	WHERE id = $4
-	RETURNING id, title, done, priority, created_at, done_at`
+	RETURNING id, title, done, priority, created_at, done_at, daily`
 
-	row := pr.db.QueryRow(query, title, done, priority, id)
+	row := pr.db.QueryRow(query, title, done, priority, id, daily)
 	var task model.Task
-	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt); err != nil {
+	if err := row.Scan(&task.ID, &task.Title, &task.Done, &task.Priority, &task.CreatedAt, &task.DoneAt, &task.DailyDate); err != nil {
 		if err == sql.ErrNoRows {
 			return model.Task{}, model.ErrNotFound
 		}

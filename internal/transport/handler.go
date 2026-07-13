@@ -19,7 +19,7 @@ type TaskService interface {
 	Update(id int, title string) (model.Task, error)
 	Done(id int) (model.Task, error)
 	Undone(id int) (model.Task, error)
-	Patch(id int, title *string, done *bool, priority *string) (model.Task, error)
+	Patch(id int, title *string, done *bool, priority *string, daily *bool) (model.Task, error)
 	Clear() error
 	FilterByDate(tasks []model.Task, from, to time.Time) ([]model.Task, error)
 	FilterByDone(tasks []model.Task, done bool) ([]model.Task, error)
@@ -45,6 +45,7 @@ type PatchTodoRequest struct {
 	Title    *string `json:"title,omitempty"`
 	Done     *bool   `json:"done,omitempty"`
 	Priority *string `json:"priority,omitempty"`
+	Daily    *bool   `json:"daily,omitempty"`
 }
 
 type ListToDosResponse struct {
@@ -401,7 +402,7 @@ func (h *Handler) PatchTodo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	task, err := h.svc.Patch(id, req.Title, req.Done, req.Priority)
+	task, err := h.svc.Patch(id, req.Title, req.Done, req.Priority, req.Daily)
 	if err != nil {
 		WriteError(w, err)
 		return

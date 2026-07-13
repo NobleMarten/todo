@@ -12,14 +12,24 @@ import {
 
 export type Sort = '' | 'created_at' | 'priority'
 
-const ORDER_KEY = 'todo-manual-order'
+/** Manual drag order is stored per section so orders never bleed across sections. */
+export type SectionKey = 'today' | 'rest'
+export type Orders = Record<SectionKey, number[]>
 
-function loadOrder(): number[] {
+const ORDER_KEY = 'todo-manual-order'
+const EMPTY_ORDERS: Orders = { today: [], rest: [] }
+
+function loadOrders(): Orders {
   try {
     const raw = localStorage.getItem(ORDER_KEY)
-    return raw ? (JSON.parse(raw) as number[]) : []
+    if (!raw) return { ...EMPTY_ORDERS }
+    const parsed = JSON.parse(raw) as unknown
+    // migrate the previous flat id list → treat it as the "rest" section
+    if (Array.isArray(parsed)) return { today: [], rest: parsed as number[] }
+    const o = parsed as Partial<Orders>
+    return { today: o.today ?? [], rest: o.rest ?? [] }
   } catch {
-    return []
+    return { ...EMPTY_ORDERS }
   }
 }
 
@@ -49,10 +59,10 @@ export function useTodos() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
-  const [order, setOrder] = useState<number[]>(loadOrder)
-  // keep latest order without re-creating load() on every drag
-  const orderRef = useRef(order)
-  orderRef.current = order
+  const [orders, setOrders] = useState<Orders>(loadOrders)
+  // keep latest orders without re-creating load()/mutations on every drag
+  const ordersRef = useRef(orders)
+  ordersRef.current = orders
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -79,25 +89,34 @@ export function useTodos() {
     load()
   }, [load])
 
-  const persistOrder = useCallback((ids: number[]) => {
-    setOrder(ids)
+  const persistOrders = useCallback((next: Orders) => {
+    setOrders(next)
     try {
-      localStorage.setItem(ORDER_KEY, JSON.stringify(ids))
+      localStorage.setItem(ORDER_KEY, JSON.stringify(next))
     } catch {
       /* ignore quota errors */
     }
   }, [])
+
+  /** Replace the manual order of a single section (drag reorder within a section). */
+  const reorder = useCallback(
+    (section: SectionKey, ids: number[]) => {
+      persistOrders({ ...ordersRef.current, [section]: ids })
+    },
+    [persistOrders],
+  )
 
   // ── mutations ─────────────────────────────────────────────────────────────
 
   const add = useCallback(
     async (title: string, priority: string) => {
       const created = await apiAdd(title, priority)
-      // new task goes to the top of the manual order
-      persistOrder([created.id, ...orderRef.current.filter((id) => id !== created.id)])
+      // a new task is not daily yet → it belongs to the "rest" section, at the top
+      const cur = ordersRef.current
+      persistOrders({ ...cur, rest: [created.id, ...cur.rest.filter((id) => id !== created.id)] })
       await load()
     },
-    [load, persistOrder],
+    [load, persistOrders],
   )
 
   const toggle = useCallback(
@@ -117,24 +136,28 @@ export function useTodos() {
     async (id: number) => {
       try {
         await apiDelete(id)
-        persistOrder(orderRef.current.filter((x) => x !== id))
+        const cur = ordersRef.current
+        persistOrders({
+          today: cur.today.filter((x) => x !== id),
+          rest: cur.rest.filter((x) => x !== id),
+        })
         await load()
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Не удалось удалить')
       }
     },
-    [load, persistOrder],
+    [load, persistOrders],
   )
 
   const clear = useCallback(async () => {
     try {
       await apiClear()
-      persistOrder([])
+      persistOrders({ ...EMPTY_ORDERS })
       await load()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Не удалось очистить')
     }
-  }, [load, persistOrder])
+  }, [load, persistOrders])
 
   const editTitle = useCallback(
     async (id: number, title: string) => {
@@ -162,6 +185,22 @@ export function useTodos() {
     [load],
   )
 
+  const setDaily = useCallback(
+    async (id: number, daily: boolean) => {
+      // optimistic: reflect the daily flag locally right away
+      const optimistic = daily ? new Date().toISOString() : null
+      setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, daily_date: optimistic } : t)))
+      try {
+        // trust the server's daily_date (avoids depending on GET /todos returning it)
+        const updated = await apiPatch(id, { daily })
+        setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
+      } catch {
+        await load()
+      }
+    },
+    [load],
+  )
+
   return {
     todos,
     total,
@@ -176,8 +215,8 @@ export function useTodos() {
     setFrom,
     to,
     setTo,
-    order,
-    reorder: persistOrder,
+    orders,
+    reorder,
     reload: load,
     add,
     toggle,
@@ -185,5 +224,6 @@ export function useTodos() {
     clear,
     editTitle,
     setPriority,
+    setDaily,
   }
 }

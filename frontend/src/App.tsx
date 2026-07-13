@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task } from './api'
-import { useTodos, applyManualOrder } from './hooks/useTodos'
+import { useTodos, applyManualOrder, type SectionKey } from './hooks/useTodos'
 import { useTheme } from './hooks/useTheme'
-import { isToday, sortTasks } from './lib/format'
+import { isDailyTask, isToday, sortTasks } from './lib/format'
 import { AddForm } from './components/AddForm'
 import { Filters } from './components/Filters'
 import { ActiveList, type RowHandlers } from './components/lists'
 import { MoonIcon, SunIcon } from './components/icons'
 import './index.css'
+
+// non-draggable lists never fire onReorder; keep a stable no-op for the prop
+const noop = () => {}
 
 export default function App() {
   const t = useTodos()
@@ -36,8 +39,10 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  // ── derive active / completed lists ─────────────────────────────────────────
-  const { activeTasks, doneTop, doneOnly } = useMemo(() => {
+  // ── derive sections / completed lists ───────────────────────────────────────
+  // Active tasks split into «на сегодня» (daily) and «задачи» (rest). Each section
+  // keeps its own order: manual (per-section localStorage) when sort==='', else sorted.
+  const { todaySection, restSection, doneTop, doneOnly } = useMemo(() => {
     const doneOnly = t.filter === 'true'
     const active = t.todos.filter((x) => !x.done)
     let done = t.todos.filter((x) => x.done)
@@ -48,9 +53,18 @@ export default function App() {
       (a, b) => new Date(b.done_at ?? 0).getTime() - new Date(a.done_at ?? 0).getTime(),
     )
 
-    const activeOrdered = t.sort ? sortTasks(active, t.sort) : applyManualOrder(active, t.order)
-    return { activeTasks: activeOrdered, doneTop: done, doneOnly }
-  }, [t.todos, t.filter, t.sort, t.order])
+    const orderSection = (tasks: Task[], key: SectionKey) =>
+      t.sort ? sortTasks(tasks, t.sort) : applyManualOrder(tasks, t.orders[key])
+
+    return {
+      todaySection: orderSection(active.filter(isDailyTask), 'today'),
+      restSection: orderSection(active.filter((x) => !isDailyTask(x)), 'rest'),
+      doneTop: done,
+      doneOnly,
+    }
+  }, [t.todos, t.filter, t.sort, t.orders])
+
+  const activeCount = todaySection.length + restSection.length
 
   const doneCount = useMemo(() => t.todos.filter((x) => x.done).length, [t.todos])
 
@@ -88,13 +102,18 @@ export default function App() {
     onEditCommit: commitEdit,
     onEditCancel: () => setEditId(null),
     onPriorityChange: t.setPriority,
+    onToggleDaily: (todo) => void t.setDaily(todo.id, !isDailyTask(todo)),
   }
 
-  const onReorder = useCallback(
-    (reordered: Task[]) => {
-      const activeIds = reordered.map((x) => x.id)
-      const rest = t.order.filter((id) => !activeIds.includes(id))
-      t.reorder([...activeIds, ...rest])
+  // Reorder within a single section. A manual drag is an explicit hand-order intent,
+  // so if a sort is active we drop back to «вручную» and keep the new per-section order.
+  const onReorderSection = useCallback(
+    (section: SectionKey) => (reordered: Task[]) => {
+      t.reorder(
+        section,
+        reordered.map((x) => x.id),
+      )
+      if (t.sort) t.setSort('')
     },
     [t],
   )
@@ -200,7 +219,7 @@ export default function App() {
             </span>
           </div>
         ) : doneOnly ? (
-          <ActiveList tasks={doneTop} draggable={false} onReorder={onReorder} handlers={handlers} />
+          <ActiveList tasks={doneTop} draggable={false} onReorder={noop} handlers={handlers} />
         ) : (
           <>
             {doneTop.length > 0 && (
@@ -208,26 +227,46 @@ export default function App() {
                 <div className="done-label">
                   выполнено{t.filter === 'false' ? ' сегодня' : ''} · {doneTop.length}
                 </div>
-                <ActiveList tasks={doneTop} draggable={false} onReorder={onReorder} handlers={handlers} />
+                <ActiveList tasks={doneTop} draggable={false} onReorder={noop} handlers={handlers} />
               </section>
             )}
-            {activeTasks.length > 0 ? (
-              <ActiveList
-                tasks={activeTasks}
-                draggable={t.sort === ''}
-                onReorder={onReorder}
-                handlers={handlers}
-              />
-            ) : doneTop.length === 0 ? (
+
+            {todaySection.length > 0 && (
+              <section className="section-group">
+                <div className="section-label section-today">на сегодня · {todaySection.length}</div>
+                <ActiveList
+                  tasks={todaySection}
+                  draggable
+                  onReorder={onReorderSection('today')}
+                  handlers={handlers}
+                />
+              </section>
+            )}
+
+            {restSection.length > 0 && (
+              <section className="section-group">
+                {todaySection.length > 0 && (
+                  <div className="section-label">задачи · {restSection.length}</div>
+                )}
+                <ActiveList
+                  tasks={restSection}
+                  draggable
+                  onReorder={onReorderSection('rest')}
+                  handlers={handlers}
+                />
+              </section>
+            )}
+
+            {activeCount === 0 && doneTop.length === 0 && (
               <div className="empty">
                 <span className="empty-icon">✓</span>
                 <span className="empty-title">на сегодня всё</span>
               </div>
-            ) : null}
+            )}
           </>
         )}
 
-        {t.sort === '' && !doneOnly && activeTasks.length > 1 && (
+        {!doneOnly && activeCount > 1 && (
           <p className="hint-footer">потяни за ⠿, чтобы изменить порядок · двойной клик — правка</p>
         )}
       </main>

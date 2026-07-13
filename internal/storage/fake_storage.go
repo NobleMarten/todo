@@ -115,7 +115,7 @@ func (fr *FakeRepo) Update(id int, title string) (model.Task, error) {
 	return model.Task{}, model.ErrNotFound
 }
 
-func (fr *FakeRepo) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
+func (fr *FakeRepo) Patch(id int, title *string, done *bool, priority *string, daily *bool) (model.Task, error) {
 	for i, ts := range fr.Tasks {
 		if ts.ID == id {
 			if title != nil {
@@ -136,6 +136,10 @@ func (fr *FakeRepo) Patch(id int, title *string, done *bool, priority *string) (
 			}
 			if priority != nil {
 				fr.Tasks[i].Priority = *priority
+			}
+			if daily != nil {
+				now := time.Now()
+				fr.Tasks[i].DailyDate = &now
 			}
 			return fr.Tasks[i], nil
 		}

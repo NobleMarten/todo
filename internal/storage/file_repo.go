@@ -13,7 +13,7 @@ type RepoStorage interface {
 	Done(id int) (model.Task, error)
 	Undone(id int) (model.Task, error)
 	Delete(id int) (model.Task, error)
-	Patch(id int, title *string, done *bool, priority *string) (model.Task, error)
+	Patch(id int, title *string, done *bool, priority *string, daily *bool) (model.Task, error)
 	Clear() error
 }
 
@@ -146,7 +146,7 @@ func (fr *FileRepo) Update(id int, title string) (model.Task, error) {
 	return model.Task{}, nil
 }
 
-func (fr *FileRepo) Patch(id int, title *string, done *bool, priority *string) (model.Task, error) {
+func (fr *FileRepo) Patch(id int, title *string, done *bool, priority *string, daily *bool) (model.Task, error) {
 	tasks, err := fr.fs.Load()
 	if err != nil {
 		return model.Task{}, err
@@ -172,6 +172,10 @@ func (fr *FileRepo) Patch(id int, title *string, done *bool, priority *string) (
 			}
 			if priority != nil {
 				tasks[i].Priority = *priority
+			}
+			if daily != nil {
+				now := time.Now()
+				tasks[i].DailyDate = &now
 			}
 			if err := fr.fs.Save(tasks); err != nil {
 				return ts, err

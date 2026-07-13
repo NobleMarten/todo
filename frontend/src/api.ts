@@ -5,6 +5,10 @@ export type Task = {
   priority?: 'high' | 'medium' | 'low'
   created_at?: string
   done_at?: string | null
+  // Backend json tag is `daily_date` (model.Task). RFC3339 date or null.
+  // May be absent entirely until the backend List/GetByID SELECTs include it —
+  // the UI treats missing/null as "not a daily task" (soft degradation).
+  daily_date?: string | null
 }
 
 export type ListTodosResponse = {
@@ -101,11 +105,13 @@ export async function setDone(id: number, done: boolean): Promise<void> {
 }
 
 // ── PATCH /todos/:id ──────────────────────────────────────────────────────────
-// handler: PatchTodo — accepts { title?, done? }, returns updated Task
+// handler: PatchTodo — accepts { title?, done?, priority?, daily? }, returns updated Task.
+// `daily: true`  → backend sets daily = CURRENT_DATE
+// `daily: false` → backend clears daily = NULL
 
 export async function patchTodo(
   id: number,
-  fields: { title?: string; done?: boolean; priority?: string },
+  fields: { title?: string; done?: boolean; priority?: string; daily?: boolean },
 ): Promise<Task> {
   return request<Task>(`${API_URL}/todos/${id}`, {
     method: 'PATCH',

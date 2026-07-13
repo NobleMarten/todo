@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 import type { Task } from '../api'
-import { formatDate, nextPriority, PRIORITY_LABEL } from '../lib/format'
-import { CheckIcon, TrashIcon } from './icons'
+import { formatDate, isDailyTask, nextPriority, PRIORITY_LABEL } from '../lib/format'
+import { CheckIcon, DailyStarIcon, TrashIcon } from './icons'
 
 interface Props {
   todo: Task
@@ -16,6 +16,7 @@ interface Props {
   onEditCommit: () => void
   onEditCancel: () => void
   onPriorityChange: (p: string) => void
+  onToggleDaily: () => void
 }
 
 export function TodoRow({
@@ -31,16 +32,18 @@ export function TodoRow({
   onEditCommit,
   onEditCancel,
   onPriorityChange,
+  onToggleDaily,
 }: Props) {
   const editRef = useRef<HTMLInputElement>(null)
   const priority = todo.priority || 'low'
+  const daily = isDailyTask(todo)
 
   useEffect(() => {
     if (isEditing) editRef.current?.focus()
   }, [isEditing])
 
   return (
-    <div className={`todo-row ${todo.done ? 'done' : ''} ${isDeleting ? 'deleting' : ''} priority-${priority}`}>
+    <div className={`todo-row ${todo.done ? 'done' : ''} ${isDeleting ? 'deleting' : ''} ${daily ? 'daily' : ''} priority-${priority}`}>
       {dragHandle}
 
       <button
@@ -82,6 +85,16 @@ export function TodoRow({
           {todo.created_at && <span className="todo-date">{formatDate(todo.created_at)}</span>}
         </div>
       </div>
+
+      <button
+        className={`daily-btn ${daily ? 'active' : ''}`}
+        onClick={onToggleDaily}
+        aria-pressed={daily}
+        aria-label={daily ? `Убрать из «на сегодня»: ${todo.title}` : `В «на сегодня»: ${todo.title}`}
+        title={daily ? 'Убрать из «на сегодня»' : 'В «на сегодня»'}
+      >
+        <DailyStarIcon filled={daily} />
+      </button>
 
       <button className="del-btn" onClick={onDelete} aria-label={`Удалить: ${todo.title}`}>
         <TrashIcon />

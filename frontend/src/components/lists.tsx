@@ -14,6 +14,7 @@ export interface RowHandlers {
   onEditCommit: (id: number) => void
   onEditCancel: () => void
   onPriorityChange: (id: number, p: string) => void
+  onToggleDaily: (todo: Task) => void
 }
 
 function row(todo: Task, h: RowHandlers, dragHandle?: React.ReactNode) {
@@ -31,6 +32,7 @@ function row(todo: Task, h: RowHandlers, dragHandle?: React.ReactNode) {
       onEditCommit={() => h.onEditCommit(todo.id)}
       onEditCancel={h.onEditCancel}
       onPriorityChange={(p) => h.onPriorityChange(todo.id, p)}
+      onToggleDaily={() => h.onToggleDaily(todo)}
     />
   )
 }
