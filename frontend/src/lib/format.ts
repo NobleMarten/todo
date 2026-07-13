@@ -17,9 +17,24 @@ export function isToday(iso?: string | null): boolean {
   )
 }
 
-/** A task is "на сегодня" when its daily_date (if any) falls on the current day. */
+/** Local calendar date as YYYY-MM-DD. */
+export function todayKey(): string {
+  const d = new Date()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${m}-${day}`
+}
+
+/**
+ * A task is "на сегодня" when its daily_date is the current calendar day.
+ * daily_date is a DATE the backend serializes at UTC midnight ("2026-07-13T00:00:00Z"),
+ * so we compare the leading date portion directly instead of parsing through Date() —
+ * that avoids the timezone shift that would drop a day for viewers behind UTC.
+ */
 export function isDailyTask(task: Task): boolean {
-  return isToday(task.daily_date)
+  const d = task.daily_date
+  if (!d) return false
+  return d.slice(0, 10) === todayKey()
 }
 
 export const PRIORITY_WEIGHT: Record<string, number> = { high: 1, medium: 2, low: 3 }

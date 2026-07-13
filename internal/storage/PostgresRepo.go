@@ -140,7 +140,7 @@ func (pr *PostgresRepo) Patch(id int, title *string, done *bool, priority *strin
 			else done_at
 		END,
 		daily = CASE
-			WHEN $5 = true THEN CURRENT_DATE
+			WHEN $5 = true THEN (now() AT TIME ZONE 'Europe/Moscow')::date
 			WHEN $5 = false THEN NULL
 			else daily
 		END

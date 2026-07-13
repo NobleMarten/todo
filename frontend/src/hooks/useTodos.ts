@@ -9,6 +9,7 @@ import {
   type Task,
   type FilterDone,
 } from '../api'
+import { todayKey } from '../lib/format'
 
 export type Sort = '' | 'created_at' | 'priority'
 
@@ -187,8 +188,10 @@ export function useTodos() {
 
   const setDaily = useCallback(
     async (id: number, daily: boolean) => {
-      // optimistic: reflect the daily flag locally right away
-      const optimistic = daily ? new Date().toISOString() : null
+      // optimistic: reflect the daily flag locally right away.
+      // Use today's *local* date so isDailyTask (which compares the date portion)
+      // matches immediately regardless of timezone.
+      const optimistic = daily ? `${todayKey()}T00:00:00Z` : null
       setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, daily_date: optimistic } : t)))
       try {
         // trust the server's daily_date (avoids depending on GET /todos returning it)
