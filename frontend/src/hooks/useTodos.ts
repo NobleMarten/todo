@@ -9,26 +9,27 @@ import {
   type Task,
   type FilterDone,
 } from '../api'
-import { todayKey } from '../lib/format'
-
-export type Sort = '' | 'created_at' | 'priority'
+import { todayKey, type Section } from '../lib/format'
 
 /** Manual drag order is stored per section so orders never bleed across sections. */
-export type SectionKey = 'today' | 'rest'
-export type Orders = Record<SectionKey, number[]>
+export type Orders = Record<Section, number[]>
 
 const ORDER_KEY = 'todo-manual-order'
-const EMPTY_ORDERS: Orders = { today: [], rest: [] }
+const EMPTY_ORDERS: Orders = { daily: [], high: [], medium: [], low: [] }
+const SECTION_KEYS: Section[] = ['daily', 'high', 'medium', 'low']
 
 function loadOrders(): Orders {
   try {
     const raw = localStorage.getItem(ORDER_KEY)
     if (!raw) return { ...EMPTY_ORDERS }
-    const parsed = JSON.parse(raw) as unknown
-    // migrate the previous flat id list → treat it as the "rest" section
-    if (Array.isArray(parsed)) return { today: [], rest: parsed as number[] }
-    const o = parsed as Partial<Orders>
-    return { today: o.today ?? [], rest: o.rest ?? [] }
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    // only keep the known section keys; older shapes (flat array / today+rest) are dropped
+    const next: Orders = { ...EMPTY_ORDERS }
+    for (const k of SECTION_KEYS) {
+      const v = parsed?.[k]
+      if (Array.isArray(v)) next[k] = v as number[]
+    }
+    return next
   } catch {
     return { ...EMPTY_ORDERS }
   }
@@ -46,8 +47,8 @@ export function applyManualOrder(tasks: Task[], order: number[]): Task[] {
 }
 
 /**
- * Owns all task data: filter/sort UI state, fetching, and optimistic mutations.
- * Keeps a manual drag order persisted in localStorage.
+ * Owns all task data: filter/date UI state, fetching, and optimistic mutations.
+ * Keeps a per-section manual drag order persisted in localStorage.
  */
 export function useTodos() {
   const [todos, setTodos] = useState<Task[]>([])
@@ -56,7 +57,6 @@ export function useTodos() {
   const [error, setError] = useState<string | null>(null)
 
   const [filter, setFilter] = useState<FilterDone>('false')
-  const [sort, setSort] = useState<Sort>('priority')
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
@@ -99,22 +99,15 @@ export function useTodos() {
     }
   }, [])
 
-  /** Replace the manual order of a single section (drag reorder within a section). */
-  const reorder = useCallback(
-    (section: SectionKey, ids: number[]) => {
-      persistOrders({ ...ordersRef.current, [section]: ids })
-    },
-    [persistOrders],
-  )
-
   // ── mutations ─────────────────────────────────────────────────────────────
 
   const add = useCallback(
     async (title: string, priority: string) => {
       const created = await apiAdd(title, priority)
-      // a new task is not daily yet → it belongs to the "rest" section, at the top
+      // a new task isn't daily → it lands in its priority section, at the top
+      const key = (priority as Section) in ordersRef.current ? (priority as Section) : 'low'
       const cur = ordersRef.current
-      persistOrders({ ...cur, rest: [created.id, ...cur.rest.filter((id) => id !== created.id)] })
+      persistOrders({ ...cur, [key]: [created.id, ...cur[key].filter((id) => id !== created.id)] })
       await load()
     },
     [load, persistOrders],
@@ -138,10 +131,9 @@ export function useTodos() {
       try {
         await apiDelete(id)
         const cur = ordersRef.current
-        persistOrders({
-          today: cur.today.filter((x) => x !== id),
-          rest: cur.rest.filter((x) => x !== id),
-        })
+        const next = {} as Orders
+        for (const k of SECTION_KEYS) next[k] = cur[k].filter((x) => x !== id)
+        persistOrders(next)
         await load()
       } catch (e: unknown) {
         setError(e instanceof Error ? e.message : 'Не удалось удалить')
@@ -188,14 +180,39 @@ export function useTodos() {
 
   const setDaily = useCallback(
     async (id: number, daily: boolean) => {
-      // optimistic: reflect the daily flag locally right away.
-      // Use today's *local* date so isDailyTask (which compares the date portion)
-      // matches immediately regardless of timezone.
+      // optimistic: use today's *local* date so isDailyTask matches immediately (any tz)
       const optimistic = daily ? `${todayKey()}T00:00:00Z` : null
       setTodos((prev) => prev.map((t) => (t.id === id ? { ...t, daily_date: optimistic } : t)))
       try {
-        // trust the server's daily_date (avoids depending on GET /todos returning it)
         const updated = await apiPatch(id, { daily })
+        setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
+      } catch {
+        await load()
+      }
+    },
+    [load],
+  )
+
+  /**
+   * Move a task to a section (used by cross-boundary drag). `daily` toggles the flag;
+   * any other section sets that priority and clears daily. One optimistic update + one PATCH.
+   */
+  const moveToSection = useCallback(
+    async (id: number, section: Section) => {
+      const daily = section === 'daily'
+      setTodos((prev) =>
+        prev.map((t) => {
+          if (t.id !== id) return t
+          const next = { ...t }
+          next.daily_date = daily ? `${todayKey()}T00:00:00Z` : null
+          if (!daily) next.priority = section as Task['priority']
+          return next
+        }),
+      )
+      const fields: { daily: boolean; priority?: string } = { daily }
+      if (!daily) fields.priority = section
+      try {
+        const updated = await apiPatch(id, fields)
         setTodos((prev) => prev.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)))
       } catch {
         await load()
@@ -212,14 +229,12 @@ export function useTodos() {
     setError,
     filter,
     setFilter,
-    sort,
-    setSort,
     from,
     setFrom,
     to,
     setTo,
     orders,
-    reorder,
+    reorderAll: persistOrders,
     reload: load,
     add,
     toggle,
@@ -228,5 +243,6 @@ export function useTodos() {
     editTitle,
     setPriority,
     setDaily,
+    moveToSection,
   }
 }

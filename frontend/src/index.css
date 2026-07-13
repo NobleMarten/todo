@@ -779,28 +779,36 @@ body {
   opacity: 0.7;
 }
 
-/* ── active sections («на сегодня» / «задачи») ──────────────────────────────── */
-.section-group { margin-bottom: 10px; }
-.section-group:last-of-type { margin-bottom: 0; }
-
-.section-label {
-  padding: 2px 4px 8px;
+/* ── priority section dividers (Дейлик / Срочно / Важно / Обычно) ───────────── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 4px 6px;
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
-  opacity: 0.7;
+  user-select: none;
+  cursor: default;
 }
-.section-label.section-today { color: var(--accent); opacity: 0.85; }
+.section-divider:first-child { padding-top: 2px; }
 
-/* dashed divider between stacked groups (completed → sections → sections) */
-.done-group + .section-group,
-.section-group + .section-group {
-  margin-top: 10px;
-  padding-top: 12px;
-  border-top: 1px dashed var(--border);
+.section-divider-label { flex-shrink: 0; opacity: 0.85; }
+
+/* the line to the right that makes it read as a boundary */
+.section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
 }
+
+.section-divider.sec-daily { color: var(--text); }
+.section-divider.sec-high { color: var(--p-high); }
+.section-divider.sec-medium { color: var(--p-medium); }
+.section-divider.sec-low { color: var(--muted); }
 
 /* ── hint footer ────────────────────────────────────────────────────────────── */
 .hint-footer {

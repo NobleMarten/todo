@@ -1,13 +1,10 @@
 import { useState } from 'react'
 import type { FilterDone } from '../api'
-import type { Sort } from '../hooks/useTodos'
 import { CalendarIcon } from './icons'
 
 interface Props {
   filter: FilterDone
   setFilter: (f: FilterDone) => void
-  sort: Sort
-  setSort: (s: Sort) => void
   from: string
   setFrom: (v: string) => void
   to: string
@@ -20,7 +17,7 @@ const FILTERS: { value: FilterDone; label: string }[] = [
   { value: 'true', label: 'готово' },
 ]
 
-export function Filters({ filter, setFilter, sort, setSort, from, setFrom, to, setTo }: Props) {
+export function Filters({ filter, setFilter, from, setFrom, to, setTo }: Props) {
   const [showDatePicker, setShowDatePicker] = useState(false)
   const hasDates = Boolean(from || to)
 
@@ -37,19 +34,6 @@ export function Filters({ filter, setFilter, sort, setSort, from, setFrom, to, s
             {f.label}
           </button>
         ))}
-      </div>
-
-      <div className="filter-group">
-        <select
-          className="sort-select"
-          value={sort}
-          onChange={(e) => setSort(e.target.value as Sort)}
-          aria-label="Сортировка"
-        >
-          <option value="">вручную</option>
-          <option value="created_at">по дате</option>
-          <option value="priority">по приоритету</option>
-        </select>
       </div>
 
       <div className="filter-group date-toggle-group">

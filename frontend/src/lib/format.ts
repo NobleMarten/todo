@@ -37,6 +37,22 @@ export function isDailyTask(task: Task): boolean {
   return d.slice(0, 10) === todayKey()
 }
 
+/** Priority-based sections, top to bottom. `daily` sits above the priority buckets. */
+export type Section = 'daily' | 'high' | 'medium' | 'low'
+
+export const SECTIONS: { key: Section; label: string }[] = [
+  { key: 'daily', label: 'на сегодня' },
+  { key: 'high', label: 'срочно' },
+  { key: 'medium', label: 'важно' },
+  { key: 'low', label: 'обычно' },
+]
+
+/** Which section a task currently lives in: daily wins, otherwise its priority. */
+export function sectionOf(task: Task): Section {
+  if (isDailyTask(task)) return 'daily'
+  return (task.priority || 'low') as Section
+}
+
 export const PRIORITY_WEIGHT: Record<string, number> = { high: 1, medium: 2, low: 3 }
 
 export function priorityWeight(p?: string): number {
