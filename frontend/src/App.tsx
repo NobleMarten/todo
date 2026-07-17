@@ -2,21 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Task } from './api'
 import { useTodos, applyManualOrder, type Orders } from './hooks/useTodos'
 import { useTheme } from './hooks/useTheme'
+import { useActivity } from './hooks/useActivity'
 import { isToday, sectionOf, SECTIONS, type Section } from './lib/format'
 import { AddForm } from './components/AddForm'
 import { Filters } from './components/Filters'
+import { Activity } from './components/Activity'
 import { ActiveList, SectionsBoard, type RowHandlers, type BoardSection } from './components/lists'
-import { MoonIcon, SunIcon } from './components/icons'
+import { ActivityIcon, ListIcon, MoonIcon, SunIcon } from './components/icons'
 import './index.css'
 
 export default function App() {
   const t = useTodos()
   const { theme, toggle: toggleTheme } = useTheme()
 
+  const [view, setView] = useState<'list' | 'activity'>('list')
+  const activity = useActivity(view === 'activity')
+
   const [editId, setEditId] = useState<number | null>(null)
   const [editVal, setEditVal] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  // clear needs a double confirm: 0 = idle, 1 = "точно?", 2 = "точно-точно?"
+  const [clearStep, setClearStep] = useState(0)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -154,6 +160,16 @@ export default function App() {
             </div>
 
             <button
+              className={`icon-btn ${view === 'activity' ? 'active' : ''}`}
+              onClick={() => setView((v) => (v === 'activity' ? 'list' : 'activity'))}
+              aria-label={view === 'activity' ? 'К списку задач' : 'Активность по дням'}
+              aria-pressed={view === 'activity'}
+              title={view === 'activity' ? 'К списку задач' : 'Активность'}
+            >
+              {view === 'activity' ? <ListIcon /> : <ActivityIcon />}
+            </button>
+
+            <button
               className="icon-btn"
               onClick={toggleTheme}
               aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
@@ -161,24 +177,28 @@ export default function App() {
               {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             </button>
 
-            {t.todos.length > 0 && !showClearConfirm && (
-              <button className="clear-btn" onClick={() => setShowClearConfirm(true)}>
+            {view === 'list' && t.todos.length > 0 && clearStep === 0 && (
+              <button className="clear-btn" onClick={() => setClearStep(1)}>
                 очистить
               </button>
             )}
-            {showClearConfirm && (
+            {view === 'list' && clearStep > 0 && (
               <div className="clear-confirm">
-                <span>точно?</span>
+                <span>{clearStep === 1 ? 'точно?' : 'точно-точно?'}</span>
                 <button
                   className="confirm-yes"
                   onClick={() => {
-                    setShowClearConfirm(false)
-                    void t.clear()
+                    if (clearStep === 1) {
+                      setClearStep(2)
+                    } else {
+                      setClearStep(0)
+                      void t.clear()
+                    }
                   }}
                 >
                   да
                 </button>
-                <button className="confirm-no" onClick={() => setShowClearConfirm(false)}>
+                <button className="confirm-no" onClick={() => setClearStep(0)}>
                   нет
                 </button>
               </div>
@@ -186,6 +206,15 @@ export default function App() {
           </div>
         </header>
 
+        {view === 'activity' ? (
+          <Activity
+            counts={activity.counts}
+            loading={activity.loading}
+            error={activity.error}
+            onReload={activity.reload}
+          />
+        ) : (
+          <>
         <AddForm inputRef={inputRef} onAdd={t.add} />
 
         <Filters
@@ -253,6 +282,8 @@ export default function App() {
           <p className="hint-footer">
             потяни за ⠿: вверх/вниз — порядок, через границу — приоритет · двойной клик — правка
           </p>
+        )}
+          </>
         )}
       </main>
     </div>

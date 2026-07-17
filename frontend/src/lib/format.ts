@@ -17,12 +17,32 @@ export function isToday(iso?: string | null): boolean {
   )
 }
 
-/** Local calendar date as YYYY-MM-DD. */
-export function todayKey(): string {
-  const d = new Date()
+/** Local calendar date as YYYY-MM-DD for a given Date. */
+export function dateKey(d: Date): string {
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
   return `${d.getFullYear()}-${m}-${day}`
+}
+
+/** Local calendar date as YYYY-MM-DD. */
+export function todayKey(): string {
+  return dateKey(new Date())
+}
+
+/** Local calendar-day key for an ISO timestamp (used to bucket done_at by local day). */
+export function localDayOf(iso?: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? null : dateKey(d)
+}
+
+/** Russian plural for "задача": 1 задача, 2 задачи, 5 задач. */
+export function pluralTasks(n: number): string {
+  const mod10 = n % 10
+  const mod100 = n % 100
+  if (mod10 === 1 && mod100 !== 11) return `${n} задача`
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} задачи`
+  return `${n} задач`
 }
 
 /**

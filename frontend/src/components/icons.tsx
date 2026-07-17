@@ -83,3 +83,30 @@ export function GripIcon() {
     </svg>
   )
 }
+
+export function ActivityIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="2" y="2" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.35" />
+      <rect x="6.5" y="2" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.9" />
+      <rect x="11" y="2" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.55" />
+      <rect x="2" y="6.5" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.9" />
+      <rect x="6.5" y="6.5" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.55" />
+      <rect x="11" y="6.5" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.35" />
+      <rect x="2" y="11" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.55" />
+      <rect x="6.5" y="11" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.35" />
+      <rect x="11" y="11" width="3" height="3" rx="0.7" fill="currentColor" opacity="0.9" />
+    </svg>
+  )
+}
+
+export function ListIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <path d="M5.5 4h8M5.5 8h8M5.5 12h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="2.5" cy="4" r="1" fill="currentColor" />
+      <circle cx="2.5" cy="8" r="1" fill="currentColor" />
+      <circle cx="2.5" cy="12" r="1" fill="currentColor" />
+    </svg>
+  )
+}
