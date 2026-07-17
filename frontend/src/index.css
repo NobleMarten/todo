@@ -248,13 +248,42 @@ body {
 .add-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ── priority segmented control (add form) ──────────────────────────────────── */
+.add-options {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
 .priority-segment {
   display: flex;
-  margin-top: 8px;
   width: fit-content;
   border: 1px solid var(--border);
   border-radius: 6px;
   overflow: hidden;
+}
+
+.daily-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+.daily-toggle:hover { color: var(--text); background: var(--surface); }
+.daily-toggle.active {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .seg {
@@ -626,7 +655,8 @@ body {
   outline: none;
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
+  /* 16px keeps iOS Safari from auto-zooming when the field gains focus */
+  font-size: 16px;
   padding: 2px 8px;
   box-shadow: 0 0 0 2px var(--accent-dim);
 }

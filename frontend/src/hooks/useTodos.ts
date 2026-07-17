@@ -102,10 +102,22 @@ export function useTodos() {
   // ── mutations ─────────────────────────────────────────────────────────────
 
   const add = useCallback(
-    async (title: string, priority: string) => {
+    async (title: string, priority: string, daily = false) => {
       const created = await apiAdd(title, priority)
-      // a new task isn't daily → it lands in its priority section, at the top
-      const key = (priority as Section) in ordersRef.current ? (priority as Section) : 'low'
+      // optionally pin the fresh task to "на сегодня" in the same flow
+      if (daily) {
+        try {
+          await apiPatch(created.id, { daily: true })
+        } catch {
+          /* task is created; just not marked daily — surfaces on next load */
+        }
+      }
+      // daily wins → the task lands in the daily section, otherwise its priority; at the top
+      const key: Section = daily
+        ? 'daily'
+        : (priority as Section) in ordersRef.current
+          ? (priority as Section)
+          : 'low'
       const cur = ordersRef.current
       persistOrders({ ...cur, [key]: [created.id, ...cur[key].filter((id) => id !== created.id)] })
       await load()
