@@ -912,6 +912,9 @@ body {
   .cal-stats { gap: 10px; }
 
   .header-left { font-size: 18px; }
+
+  /* nudge the total/done stats away from the [todo] logo on narrow screens */
+  .header-stats { margin-left: 14px; }
 }
 
 /* ── activity / contribution grid ───────────────────────────────────────────── */
