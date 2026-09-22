@@ -1,0 +1,13 @@
+node_modules
+dist
+
+# .env с адресом прод-API НЕ попадает в контекст:
+# адрес приходит только через build-arg VITE_API_URL
+.env
+.env.*
+
+.DS_Store
+README.md
+deploy-frontend.sh
+Dockerfile
+.dockerignore

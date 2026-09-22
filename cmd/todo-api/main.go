@@ -48,6 +48,14 @@ func main() {
 
 	mux := http.NewServeMux()
 
+	// Liveness-проба для Docker healthcheck: намеренно не трогает БД.
+	// Отвечает «процесс жив и обслуживает HTTP»; недоступность Postgres —
+	// это не повод перезапускать контейнер, там своя healthcheck и depends_on.
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("ok"))
+	})
+
 	mux.HandleFunc("/todos", h.Todos)       // Регистрируем обработчик (роут) для пути /todos.
 	mux.HandleFunc("/todos/", h.Todos)      // Регистрируем обработчик для пути /todos/{id}.
 	mux.HandleFunc("/todos/clear", h.Todos) // Регистрируем обработчик для пути /todos/clear.

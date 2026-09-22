@@ -1,0 +1,73 @@
+name: todo
+
+services:
+  # ─── Postgres ───────────────────────────────────────────────────────────────
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-todo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-todo_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-todo_db}
+    volumes:
+      # Именованный том — данные переживают пересоздание контейнера.
+      - pgdata:/var/lib/postgresql/data
+      # Отрабатывает один раз, на пустом томе.
+      - ./db/init.sql:/docker-entrypoint-initdb.d/001-init.sql:ro
+    ports:
+      # Только на loopback: порт доступен для psql/pg_dump с самой машины,
+      # но не торчит наружу с публичного IP VPS.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-todo_user} -d ${POSTGRES_DB:-todo_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ─── Go API ─────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        # Ждём не «контейнер запущен», а «БД реально принимает соединения»:
+        # NewPostgresRepo делает Ping и при неудаче кладёт процесс log.Fatal'ом.
+        condition: service_healthy
+    environment:
+      ENV: ${ENV:-prod}
+      PORT: "8080"
+      HTTP_SHUTDOWN_TIMEOUT: ${HTTP_SHUTDOWN_TIMEOUT:-10s}
+      # Хост — имя сервиса `db` из этой же сети, а не localhost.
+      DB_URL: postgres://${POSTGRES_USER:-todo_user}:${POSTGRES_PASSWORD:-todo_pass}@db:5432/${POSTGRES_DB:-todo_db}?sslmode=disable
+    ports:
+      - "${API_PORT:-8080}:8080"
+    # Больше, чем HTTP_SHUTDOWN_TIMEOUT (10s), иначе Docker прибьёт процесс
+    # SIGKILL'ом ровно в тот момент, когда он корректно доживает соединения.
+    stop_grace_period: 20s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+
+  # ─── nginx со статикой фронта ───────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # Пусто → относительные запросы /todos → проксируются на backend
+        # этим же nginx. Заполнять только если фронт должен ходить
+        # на какой-то другой адрес API.
+        VITE_API_URL: ${VITE_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${FRONTEND_PORT:-8081}:80"
+
+volumes:
+  pgdata:
