@@ -43,7 +43,9 @@ services:
       # Хост — имя сервиса `db` из этой же сети, а не localhost.
       DB_URL: postgres://${POSTGRES_USER:-todo_user}:${POSTGRES_PASSWORD:-todo_pass}@db:5432/${POSTGRES_DB:-todo_db}?sslmode=disable
     ports:
-      - "${API_PORT:-8080}:8080"
+      # BIND_IP по умолчанию 127.0.0.1: наружу API попадает только
+      # через nginx. На 0.0.0.0 его можно вывести осознанно.
+      - "${BIND_IP:-127.0.0.1}:${API_PORT:-8080}:8080"
     # Больше, чем HTTP_SHUTDOWN_TIMEOUT (10s), иначе Docker прибьёт процесс
     # SIGKILL'ом ровно в тот момент, когда он корректно доживает соединения.
     stop_grace_period: 20s
@@ -67,7 +69,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${FRONTEND_PORT:-8081}:80"
+      - "${BIND_IP:-127.0.0.1}:${FRONTEND_PORT:-8081}:80"
 
 volumes:
   pgdata:
