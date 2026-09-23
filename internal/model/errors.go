@@ -15,4 +15,5 @@ var (
 	ErrNotAllowed             = errors.New("operation not allowed")
 	ErrMissingDBURL           = errors.New("missing database URL")
 	ErrInvalidShutdownTimeout = errors.New("invalid shutdown timeout")
+	ErrInvalidDate            = errors.New("invalid date, want YYYY-MM-DD")
 )

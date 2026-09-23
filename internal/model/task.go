@@ -3,11 +3,24 @@ package model
 import "time"
 
 type Task struct {
-	ID        int        `json:"id"`
-	Title     string     `json:"title"`
-	Done      bool       `json:"done"`
-	Priority  string     `json:"priority"`
-	CreatedAt time.Time  `json:"created_at"`
-	DoneAt    *time.Time `json:"done_at,omitempty"`
-	DailyDate *time.Time `json:"daily_date"`
+	ID           int        `json:"id"`
+	Title        string     `json:"title"`
+	Done         bool       `json:"done"`
+	Priority     string     `json:"priority"` // high | medium | low
+	ProjectID    *int       `json:"project_id"`
+	ParentID     *int       `json:"parent_id"`
+	DueDate      *Date      `json:"due_date"`      // дедлайн: позже нельзя
+	ScheduledFor *Date      `json:"scheduled_for"` // день, когда садишься за задачу
+	Position     int        `json:"position"`
+	Note         *string    `json:"note"`
+	CreatedAt    time.Time  `json:"created_at"`
+	DoneAt       *time.Time `json:"done_at"`
+	Subtasks     []Task     `json:"subtasks,omitempty"`      // только в GET /tasks/{id}
+	SubtaskStats *Stats     `json:"subtask_stats,omitempty"` // только у корневых задач в списках
+}
+
+// Stats — прогресс подзадач: сколько выполнено из скольких.
+type Stats struct {
+	Done  int `json:"done"`
+	Total int `json:"total"`
 }

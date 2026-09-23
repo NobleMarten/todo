@@ -174,8 +174,8 @@ func (fr *FileRepo) Patch(id int, title *string, done *bool, priority *string, d
 				tasks[i].Priority = *priority
 			}
 			if daily != nil {
-				now := time.Now()
-				tasks[i].DailyDate = &now
+				today := model.DateOf(time.Now())
+				tasks[i].ScheduledFor = &today
 			}
 			if err := fr.fs.Save(tasks); err != nil {
 				return ts, err

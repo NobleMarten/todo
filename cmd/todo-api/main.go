@@ -33,11 +33,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	db_url := cfg.DB.URL
-	repo, err := storage.NewPostgresRepo(db_url)
+	db, err := storage.NewDB(cfg.DB.URL)
 	if err != nil {
-		log.Fatal(err, "failed to connect to database")
+		log.Fatalf("failed to connect to database: %v", err)
 	}
+
+	// Миграции накатываются на старте, чтобы на VPS не нужен был отдельный бинарник goose.
+	if err := storage.Migrate(db); err != nil {
+		log.Fatalf("failed to migrate database: %v", err)
+	}
+
+	repo := storage.NewPostgresRepo(db)
 
 	svc, err := service.NewTaskService(repo)
 	if err != nil {
@@ -93,9 +99,7 @@ func main() {
 		_ = srv.Close() // Если произошла ошибка при попытке корректного завершения, принудительно закрываем сервер.
 	}
 
-	if c, ok := any(repo).(interface{ Close() error }); ok { // Проверяем, реализует ли репозиторий интерфейс с методом Close() для корректного закрытия соединения с базой данных.
-		_ = c.Close() // Если репозиторий реализует интерфейс с методом Close(), вызываем его для закрытия соединения с базой данных.
-	}
+	_ = db.Close() // Закрываем пул соединений с базой: он теперь создаётся здесь, а не внутри репозитория.
 
 	log.Println("bye")
 }

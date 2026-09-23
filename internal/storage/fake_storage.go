@@ -138,8 +138,8 @@ func (fr *FakeRepo) Patch(id int, title *string, done *bool, priority *string, d
 				fr.Tasks[i].Priority = *priority
 			}
 			if daily != nil {
-				now := time.Now()
-				fr.Tasks[i].DailyDate = &now
+				today := model.DateOf(time.Now())
+				fr.Tasks[i].ScheduledFor = &today
 			}
 			return fr.Tasks[i], nil
 		}
