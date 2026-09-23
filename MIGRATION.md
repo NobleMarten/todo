@@ -1,3 +1,5 @@
+> ✅ Выполнено 2026-09-23. Оставлено как справка и как шаблон для похожих переездов.
+
 # Переезд todo с systemd на Docker (VPS 95.85.252.88)
 
 Разведка проведена, значения ниже — настоящие.
@@ -9,7 +11,7 @@
 | бинарник | `/root/todo/todo-api` |
 | переменные | `/etc/todo-api.env` (там DB_URL с паролем) |
 | база | `todo_vps_db`, владелец `todo_user`, хостовый Postgres `127.0.0.1:5432` |
-| статика | `/var/www/todo` |
+| статика | `/var/www/todo-frontend` |
 | nginx-сайт | `/etc/nginx/sites-enabled/todo-frontend` |
 | Docker | 29.4.1, уже установлен |
 
@@ -17,11 +19,14 @@
 3000/8081/5433 (finance-tracker), 8090 (beszel).
 Берём свободные: **8082** (API), **8091** (фронт), **5434** (БД).
 
+Сайт слушает **8095**, а не 80 — на 80 у nginx другой сайт.
+
 Старый systemd НЕ гасим до самого конца — откат в один шаг.
 
 ## 1. Бэкап базы — ДО всего остального
 
 ```bash
+cd /tmp    # иначе postgres ругнётся "could not change directory to /root"
 su postgres -c 'pg_dump -d todo_vps_db --clean --if-exists' > /tmp/todo-backup-$(date +%F).sql
 ls -lh /tmp/todo-backup-*.sql
 grep -c 'COPY\|INSERT' /tmp/todo-backup-*.sql    # данные на месте?
@@ -89,6 +94,10 @@ curl -s localhost:8091/todos | head -c 300
 из /var/www/todo, на проксирование в контейнер:
 
 ```nginx
+server {
+    listen 8095;
+    server_name _;
+
 location / {
     proxy_pass http://127.0.0.1:8091;
     proxy_http_version 1.1;
