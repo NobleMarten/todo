@@ -485,3 +485,55 @@ ProjectPicker), сегмент приоритета. Два отдельных �
 - Комментарий в `db/init.sql` про ALTER в `NewPostgresRepo` устарел — файл в зоне Docker, не трогал.
 - `FakeRepo`/`FileRepo`: `daily=false` ставит сегодняшнюю дату вместо очистки (было так и в main).
 
+
+### Этап 2 — бэкенд · 2026-09-24 · ветка `redesign/stage-1`, коммит «этап 2: …»
+Сделано:
+- Все эндпоинты раздела 3 на `http.ServeMux` с паттернами (`internal/transport/router.go`), `/todos*` удалены.
+  Хендлеры: `tasks_handler.go`, `projects_handler.go`, `day_handler.go` (там же `/stats/activity`). Ошибки — таблица
+  `errorCodes` в `errors_helpers.go`, добавлены `PROJECT_NOT_FOUND`, `SUBTASK_TOO_DEEP`, `INVALID_DATE`, `INVALID_VIEW`,
+  а также `INVALID_QUERY`, `INVALID_BODY`, `INVALID_PRIORITY`, `EMPTY_NAME`, `INVALID_COLOR`, `TITLE_TOO_LONG` (раньше давал 500).
+- `storage/repo.go`: `TaskRepo`, `ProjectRepo`, `TaskFilter` (набор условий через AND), `TaskQuery`, `TaskPatch` (Opt).
+  Вьюхи и блоки `/day` собираются из условий в сервисе, SQL — в `filterConds`/`orderBy` (`postgres_tasks.go`).
+  `PostgresRepo` реализует оба интерфейса на `pgx.NamedArgs`; PATCH — динамический `UPDATE` без `COALESCE`, в транзакции
+  с переносом подзадач в новый список. Reorder — один `UPDATE … FROM unnest(@ids) WITH ORDINALITY`, position = индекс с 0.
+- `FakeRepo` (`fake_repo.go`) повторяет семантику SQL; `repo_contract_test.go` гоняет один сценарий на фейке всегда
+  и на Postgres при `TEST_DB_URL` — это гарантия, что тесты сервиса на фейке значат то же, что и прод.
+- Сервисы: `task_service.go`, `project_service.go`, `day_service.go`. Конструкторы получают `*time.Location` из `APP_TZ`
+  (`config.Config.Loc`, по умолчанию `Europe/Moscow`, `Local` запрещён — имя зоны уходит в Postgres).
+- Миграции: `00005_tasks_updated_at` (колонка для «не трогали 14 дней», backfill `COALESCE(done_at, created_at)`,
+  обновляется PATCH-ем и `/day/plan`, reorder — нет); `00006_tasks_priority_not_null` (на живой базе priority была nullable).
+- В `_legacy/` (git mv): `cmd/todo-cli`, `storage/file_repo.go`, `storage/file_storage.go`, `old_cod/`, `data/tasks.json`.
+  CLI там не компилируется (ссылается на удалённое) — при желании переписать тонким HTTP-клиентом.
+- Тесты: сервисы на `FakeRepo`, хендлеры через `httptest` на настоящем роутере, контракт репозитория, миграции
+  (включая NULL priority). Прогон `TEST_DB_URL=… go test ./...` и curl-сценарий из приёмки — на одноразовой базе, зелёные.
+
+Отклонения от спеки и решения за владельца:
+- `/day`: задача попадает ровно в один блок, приоритет planned → overdue → carry_over.
+- Во всех выдачах, кроме `GET /tasks/{id}`, только корневые задачи; `done_today`, `counts.done` и `/stats/activity`
+  тоже считают только корневые (чтобы грид и «готово · N» не расходились).
+- `PATCH done:true` на выполненной — 409 `ALREADY_DONE` (как раньше), весь PATCH отклоняется.
+- Подзадача: при создании/привязке получает `project_id` родителя; сменить `project_id` у подзадачи без `parent_id`
+  в том же PATCH — 400 `INVALID_BODY`. Родителя нет — 404 `TASK_NOT_FOUND` с «parent N» в message.
+- `GET /tasks`: без `view` = `all`; `done=` переопределяет условие вьюхи; `from`/`to` только парой, фильтруют `done_at`
+  в `archive` и `created_at` в остальных; `archive` — лимит по умолчанию 50, максимум 200; `offset` работает и без `limit`;
+  допустимые `sort` — `position|due_date|priority|created_at|done_at`, пустые даты всегда в конце.
+- Ответ `GET /tasks/{id}` всегда содержит `subtasks` (хотя бы `[]`) — отдельный `TaskDetailResponse`.
+- `GET /projects` отдаёт `counts: {active, overdue}` (корневые невыполненные; принимает `?today=`).
+- Новые задачи и списки получают `MAX(position)+1` — встают в конец.
+- `/stats/activity` без параметров — последние 365 дней до сегодня в APP_TZ, ответ разреженный (только дни с done > 0).
+- id > MaxInt32 отбиваются в сервисе как 400/404, а не 500 от Postgres.
+
+Долги, которые тянутся дальше:
+- **Dockerfile не копирует `migrations/`** (с Этапа 1): `docker build` бэкенда падает на импорте `todo/migrations`.
+  Нужна строка `COPY migrations ./migrations` — зона владельца, не трогал.
+- `frontend/nginx.conf` проксирует только `/todos`: к Этапу 3 нужны `location` для `/tasks`, `/projects`, `/day`, `/stats`.
+- `compose.yml` не передаёт `APP_TZ` в backend (сработает дефолт `Europe/Moscow`) — добавить при желании.
+- Текущий фронт после этапа не работает (API `/todos` удалён) — не деплоить до Этапа 3.
+- `position` одна на все scope: reorder в «дне» меняет порядок и в проекте, и наоборот (следствие спеки;
+  для «Недели» может понадобиться отдельная `day_position`). Подзадачи переставлять нечем — scope `parent` не заведён.
+- Правило глубины подзадач — check-then-act без блокировки; при одном пользователе гонки нереальны.
+- Подзадачам можно поставить `due_date`/`scheduled_for`, но ни одна вьюха их не покажет, `/day/plan` их пропускает.
+- `CLAUDE.md` устарел (роутинг, `FileRepo`, CLI, `daily`) — обновить вместе с README на Этапе 5.
+- Мелочи: 404/405 самого ServeMux — plain text; имя списка > 60 символов даёт код `TITLE_TOO_LONG`;
+  `model.ErrNotAllowed` больше не используется; переполнение тела (1 МБ) — 400, а не 413.
+- Откат на проде: `goose down-to 0` теперь проходит 6 миграций; `00006` Down не возвращает исправленные NULL priority.

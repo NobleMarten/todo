@@ -8,73 +8,57 @@ import (
 	"todo/internal/model"
 )
 
-func WriteError(w http.ResponseWriter, err error) { // Функция WriteError записывает ошибку в HTTP-ответ в формате JSON.
-	var status int
-	var res ErrorResponse
+type ErrorResponse struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+}
 
-	switch {
-	case errors.Is(err, model.ErrNotAllowed):
-		status = http.StatusNotFound
-		res = ErrorResponse{
-			Code:    "METHOD_NOT_ALLOWED",
-			Message: err.Error(),
-		}
+// errorCodes — доменная ошибка → HTTP-статус и код для клиента. Проверяется по порядку через errors.Is.
+var errorCodes = []struct {
+	err    error
+	status int
+	code   string
+}{
+	{model.ErrNotAllowed, http.StatusNotFound, "METHOD_NOT_ALLOWED"},
+	{model.ErrNotFound, http.StatusNotFound, "TASK_NOT_FOUND"},
+	{model.ErrProjectNotFound, http.StatusNotFound, "PROJECT_NOT_FOUND"},
+	{model.ErrInvalidID, http.StatusBadRequest, "INVALID_ID"},
+	{model.ErrEmptyTitle, http.StatusBadRequest, "EMPTY_TITLE"},
+	{model.ErrTitleTooLong, http.StatusBadRequest, "TITLE_TOO_LONG"},
+	{model.ErrEmptyName, http.StatusBadRequest, "EMPTY_NAME"},
+	{model.ErrInvalidColor, http.StatusBadRequest, "INVALID_COLOR"},
+	{model.ErrInvalidPriority, http.StatusBadRequest, "INVALID_PRIORITY"},
+	{model.ErrNothingToUpdate, http.StatusBadRequest, "NOTHING_TO_UPDATE"},
+	{model.ErrAlreadyDone, http.StatusConflict, "ALREADY_DONE"},
+	{model.ErrAlreadyUndone, http.StatusConflict, "ALREADY_UNDONE"},
+	{model.ErrNotDone, http.StatusBadRequest, "NOT_DONE"},
+	{model.ErrSubtaskTooDeep, http.StatusBadRequest, "SUBTASK_TOO_DEEP"},
+	{model.ErrInvalidDate, http.StatusBadRequest, "INVALID_DATE"},
+	{model.ErrInvalidView, http.StatusBadRequest, "INVALID_VIEW"},
+	{model.ErrInvalidQuery, http.StatusBadRequest, "INVALID_QUERY"},
+	{model.ErrInvalidBody, http.StatusBadRequest, "INVALID_BODY"},
+}
 
-	case errors.Is(err, model.ErrNotFound):
-		status = http.StatusNotFound
-		res = ErrorResponse{
-			Code:    "TASK_NOT_FOUND",
-			Message: err.Error(),
-		}
+// WriteError записывает ошибку в HTTP-ответ в формате JSON {code, message}.
+// Неизвестные ошибки логируются и уходят клиенту как 500 без подробностей.
+func WriteError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	res := ErrorResponse{Code: "INTERNAL_SERVER_ERROR", Message: "internal server error"}
 
-	case errors.Is(err, model.ErrInvalidID):
-		status = http.StatusBadRequest
-		res = ErrorResponse{
-			Code:    "INVALID_ID",
-			Message: err.Error(),
-		}
-	case errors.Is(err, model.ErrEmptyTitle):
-		status = http.StatusBadRequest
-		res = ErrorResponse{
-			Code:    "EMPTY_TITLE",
-			Message: err.Error(),
-		}
-	case errors.Is(err, model.ErrNothingToUpdate):
-		status = http.StatusBadRequest
-		res = ErrorResponse{
-			Code:    "NOTHING_TO_UPDATE",
-			Message: err.Error(),
-		}
-	case errors.Is(err, model.ErrAlreadyDone):
-		status = http.StatusConflict
-		res = ErrorResponse{
-			Code:    "ALREADY_DONE",
-			Message: err.Error(),
-		}
-	case errors.Is(err, model.ErrAlreadyUndone):
-		status = http.StatusConflict
-		res = ErrorResponse{
-			Code:    "ALREADY_UNDONE",
-			Message: err.Error(),
-		}
-	case errors.Is(err, model.ErrNotDone):
-		status = http.StatusBadRequest
-		res = ErrorResponse{
-			Code:    "NOT_DONE",
-			Message: err.Error(),
-		}
-
-	default:
-		status = http.StatusInternalServerError
-		log.Printf("internal server error: %v", err)
-		res = ErrorResponse{
-			Code:    "INTERNAL_SERVER_ERROR",
-			Message: "internal server error",
+	for _, e := range errorCodes {
+		if errors.Is(err, e.err) {
+			status = e.status
+			res = ErrorResponse{Code: e.code, Message: err.Error()}
+			break
 		}
 	}
+	if status == http.StatusInternalServerError {
+		log.Printf("internal server error: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(res); err != nil {
-		http.Error(w, "internal server error", status)
+		log.Printf("write error response: %v", err)
 	}
 }

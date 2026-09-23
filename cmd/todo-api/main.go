@@ -45,27 +45,21 @@ func main() {
 
 	repo := storage.NewPostgresRepo(db)
 
-	svc, err := service.NewTaskService(repo)
-	if err != nil {
-		log.Fatal(err)
-	}
+	h := transport.NewHandler(
+		service.NewTaskService(repo, repo, cfg.Loc),
+		service.NewProjectService(repo, cfg.Loc),
+		service.NewDayService(repo, cfg.Loc),
+	)
 
-	h := transport.NewHandler(svc)
-
-	mux := http.NewServeMux()
+	mux := transport.NewRouter(h)
 
 	// Liveness-проба для Docker healthcheck: намеренно не трогает БД.
 	// Отвечает «процесс жив и обслуживает HTTP»; недоступность Postgres —
 	// это не повод перезапускать контейнер, там своя healthcheck и depends_on.
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
 	})
-
-	mux.HandleFunc("/todos", h.Todos)       // Регистрируем обработчик (роут) для пути /todos.
-	mux.HandleFunc("/todos/", h.Todos)      // Регистрируем обработчик для пути /todos/{id}.
-	mux.HandleFunc("/todos/clear", h.Todos) // Регистрируем обработчик для пути /todos/clear.
-	//http.HandleFunc("/todos/done", h.SetDone) // Регистрируем обработчик для пути /todos/done.
 
 	// Запускаем HTTP-сервер на порту 8080.
 

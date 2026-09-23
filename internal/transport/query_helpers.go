@@ -1,74 +1,88 @@
 package transport
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
+	"log"
 	"net/http"
+	"net/url"
 	"strconv"
-	"time"
+	"todo/internal/model"
 )
 
-func ParseDate(r *http.Request) (from, to time.Time, ok bool, err error) {
+const maxBodyBytes = 1 << 20
 
-	if r.URL.Query().Get("from") == "" || r.URL.Query().Get("to") == "" {
-		return time.Time{}, time.Time{}, false, nil
+// Хелперы разбора возвращают nil, если параметр не передан, и ошибку с доменным кодом,
+// если передан, но битый: хендлеру остаётся только WriteError.
+
+func queryDate(q url.Values, key string) (*model.Date, error) {
+	s := q.Get(key)
+	if s == "" {
+		return nil, nil
 	}
-	fromStr := r.URL.Query().Get("from")
-	toStr := r.URL.Query().Get("to")
-
-	from, err = time.Parse("2006-01-02", fromStr)
+	d, err := model.ParseDate(s)
 	if err != nil {
-		return time.Time{}, time.Time{}, false, errors.New("invalid from date parameter")
+		return nil, fmt.Errorf("%s: %w", key, err)
 	}
-
-	to, err = time.Parse("2006-01-02", toStr)
-	if err != nil {
-		return time.Time{}, time.Time{}, false, errors.New("invalid to date parameter")
-	}
-	return from, to, true, nil
+	return &d, nil
 }
 
-func ParseDone(r *http.Request) (done bool, ok bool, err error) {
-	if r.URL.Query().Get("done") == "" {
-		return false, false, nil
+func queryInt(q url.Values, key string) (*int, error) {
+	s := q.Get(key)
+	if s == "" {
+		return nil, nil
 	}
-	doneStr := r.URL.Query().Get("done")
-
-	done, err = strconv.ParseBool(doneStr)
+	n, err := strconv.Atoi(s)
 	if err != nil {
-		return false, false, errors.New("invalid done parameter")
+		return nil, fmt.Errorf("%w: %s=%q", model.ErrInvalidQuery, key, s)
 	}
-	return done, true, nil
+	return &n, nil
 }
 
-func SortParse(r *http.Request) (sortBy, order string, ok bool, err error) {
-	if r.URL.Query().Get("sort") == "" {
-		return "", "", false, nil
+func queryBool(q url.Values, key string) (*bool, error) {
+	s := q.Get(key)
+	if s == "" {
+		return nil, nil
 	}
-	sortBy = r.URL.Query().Get("sort")
-	order = r.URL.Query().Get("order")
-
-	if order == "" {
-		order = "asc" // значение по умолчанию
+	b, err := strconv.ParseBool(s)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s=%q", model.ErrInvalidQuery, key, s)
 	}
-
-	if order != "asc" && order != "desc" {
-		return "", "", false, errors.New("invalid order parameter")
-	}
-	return sortBy, order, true, nil
+	return &b, nil
 }
 
-func ParsePaginate(r *http.Request) (limit int, offset int, ok bool, err error) {
-	limitStr := r.URL.Query().Get("limit")
-	offsetStr := r.URL.Query().Get("offset")
-
-	if r.URL.Query().Get("limit") == "" || r.URL.Query().Get("offset") == "" {
-		return 0, 0, false, nil
+// pathID достаёт {id} из пути; всё, что не число, — INVALID_ID.
+func pathID(r *http.Request) (int, error) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %q", model.ErrInvalidID, r.PathValue("id"))
 	}
-	limit, err1 := strconv.Atoi(limitStr)
-	offset, err2 := strconv.Atoi(offsetStr)
+	return id, nil
+}
 
-	if err1 != nil || err2 != nil {
-		return 0, 0, false, errors.New("invalid limit or offset parameter")
+// decodeJSON читает тело запроса. Битая дата остаётся INVALID_DATE, всё остальное — INVALID_BODY.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	err := json.NewDecoder(r.Body).Decode(v)
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, model.ErrInvalidDate):
+		return err
+	case errors.Is(err, io.EOF):
+		return fmt.Errorf("%w: empty body", model.ErrInvalidBody)
+	default:
+		return fmt.Errorf("%w: %v", model.ErrInvalidBody, err)
 	}
-	return limit, offset, true, nil
+}
+
+func writeJSON(w http.ResponseWriter, status int, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		// заголовок уже ушёл, поменять статус нельзя — только залогировать
+		log.Printf("encode response: %v", err)
+	}
 }

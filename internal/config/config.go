@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"time"
 	"todo/internal/model"
@@ -13,6 +14,7 @@ type Config struct {
 	Port string
 	DB   struct{ URL string }
 	HTTP struct{ ShutdownTimeout time.Duration }
+	Loc  *time.Location // APP_TZ: в этой таймзоне считаются «сегодня» и границы дней
 }
 
 func Load() (Config, error) {
@@ -36,6 +38,17 @@ func Load() (Config, error) {
 	if cfg.HTTP.ShutdownTimeout <= 0 {
 		return Config{}, model.ErrInvalidShutdownTimeout
 	}
+
+	tz := getEnv("APP_TZ", "Europe/Moscow")
+	// "Local" Go понимает, а Postgres нет: имя зоны уходит в AT TIME ZONE, нужно IANA-имя.
+	if tz == "Local" {
+		return Config{}, fmt.Errorf("APP_TZ=%q: want an IANA name like Europe/Moscow", tz)
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		return Config{}, fmt.Errorf("APP_TZ=%q: %w", tz, err)
+	}
+	cfg.Loc = loc
 	return cfg, nil
 }
 

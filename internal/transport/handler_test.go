@@ -4,205 +4,380 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 	"todo/internal/model"
 	"todo/internal/service"
 	"todo/internal/storage"
 )
 
-func http_info() (*Handler, *storage.FakeRepo) {
-	repo := &storage.FakeRepo{
-		Tasks: []model.Task{
-			{ID: 1, Title: "Task 1", Done: false},
-			{ID: 2, Title: "Task 2", Done: true},
-		},
-	}
-	service, err := service.NewTaskService(repo)
+// newTestServer — настоящий роутер и сервисы поверх FakeRepo.
+func newTestServer(t *testing.T) (http.Handler, *storage.FakeRepo) {
+	t.Helper()
+	loc, err := time.LoadLocation("Europe/Moscow")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
-	h := NewHandler(service)
-	return h, repo
+	repo := &storage.FakeRepo{}
+	h := NewHandler(
+		service.NewTaskService(repo, repo, loc),
+		service.NewProjectService(repo, loc),
+		service.NewDayService(repo, loc),
+	)
+	return NewRouter(h), repo
 }
 
-func TestGETTodos(t *testing.T) {
-	h, _ := http_info()
+type response struct {
+	*httptest.ResponseRecorder
+}
 
-	req := httptest.NewRequest(http.MethodGet, "/todos", nil) // Создаем новый HTTP-запрос с методом GET и URL "/todos". Тело запроса устанавливается в nil, так как для GET-запроса обычно не требуется тело.
-	rec := httptest.NewRecorder()                             // Создаем новый HTTP-ответ, который будет использоваться для записи ответа от обработчика. Recorder позволяет нам захватывать и анализировать ответ, который будет отправлен клиенту.
+func do(t *testing.T, h http.Handler, method, path, body string) response {
+	t.Helper()
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return response{rec}
+}
 
-	h.Todos(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
-	}
-
-	if rec.Header().Get("Content-Type") != "application/json" { //проверяем что в заголовке Content-Type стоит application/json
-		t.Fatalf("expected Content-Type application/json, got %s", rec.Header().Get("Content-Type"))
-	}
-
-	var listResponse ListToDosResponse //создаем пустую структуру для распаковки ответа
-
-	err := json.Unmarshal(rec.Body.Bytes(), &listResponse)
-	if err != nil {
-		t.Fatalf("failed to unmarshal response body: %v", err)
-	}
-
-	if len(listResponse.Items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(listResponse.Items))
-	}
-
-	if listResponse.Total != 2 {
-		t.Fatalf("expected total 2, got %d", listResponse.Total)
-	}
-
-	if listResponse.Items[0].ID != 1 || listResponse.Items[0].Title != "Task 1" || listResponse.Items[0].Done != false {
-		t.Fatalf("unexpected first item: %+v", listResponse.Items[0])
+func (r response) decode(t *testing.T, v any) {
+	t.Helper()
+	if err := json.Unmarshal(r.Body.Bytes(), v); err != nil {
+		t.Fatalf("decode %q: %v", r.Body.String(), err)
 	}
 }
 
-// func TestPostTodo(t *testing.T) {
-// 	store := &storage.FakeStorage{
-// 		List: []model.Task{},
-// 	}
-// 	service := service.NewFakeTaskService(store)
-// 	h := NewHandler(service)
+// expect проверяет статус и, если code не пуст, код ошибки в теле.
+func (r response) expect(t *testing.T, status int, code string) {
+	t.Helper()
+	if r.Code != status {
+		t.Fatalf("status = %d, want %d; body %s", r.Code, status, r.Body.String())
+	}
+	if code == "" {
+		return
+	}
+	var e ErrorResponse
+	r.decode(t, &e)
+	if e.Code != code {
+		t.Fatalf("code = %q, want %q (%s)", e.Code, code, e.Message)
+	}
+}
 
-// 	body := `{"title": ""}`
-// 	reader := strings.NewReader(body) // Создаем новый io.Reader, который читает из строки body. Это позволяет нам передать JSON-объект с некорректным полем "title" в тело POST-запроса для тестирования обработки ошибок.
+func createTask(t *testing.T, h http.Handler, body string) model.Task {
+	t.Helper()
+	res := do(t, h, "POST", "/tasks", body)
+	res.expect(t, http.StatusCreated, "")
+	var task model.Task
+	res.decode(t, &task)
+	return task
+}
 
-// 	req := httptest.NewRequest(http.MethodPost, "/todos", reader) // Создаем новый HTTP-запрос с методом POST и URL "/todos". Тело запроса содержит JSON-объект с полем "title", установленным в пустую строку. Это позволяет нам протестировать, как обработчик обрабатывает POST-запросы с некорректными данными.
-// 	rec := httptest.NewRecorder()
+func TestCreateTask(t *testing.T) {
+	h, _ := newTestServer(t)
 
-// 	h.Todos(rec, req) // Вызываем метод Todos обработчика, передавая ему созданные запрос и ответ. Это позволяет нам протестировать, как обработчик обрабатывает POST-запросы на URL "/todos".
+	task := createTask(t, h, `{"title":" докер ","priority":"high","due_date":"2026-10-04"}`)
+	if task.ID == 0 || task.Title != "докер" || task.Priority != "high" || task.DueDate.String() != "2026-10-04" {
+		t.Fatalf("task = %+v", task)
+	}
 
-// 	if rec.Code != http.StatusBadRequest {
-// 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
-// 	}
+	tests := []struct {
+		name, body string
+		status     int
+		code       string
+	}{
+		{"empty title", `{"title":"  "}`, 400, "EMPTY_TITLE"},
+		{"too long", `{"title":"` + strings.Repeat("a", 121) + `"}`, 400, "TITLE_TOO_LONG"},
+		{"broken json", `{"title":`, 400, "INVALID_BODY"},
+		{"empty body", ``, 400, "INVALID_BODY"},
+		{"bad date", `{"title":"x","due_date":"04.10.2026"}`, 400, "INVALID_DATE"},
+		{"bad priority", `{"title":"x","priority":"urgent"}`, 400, "INVALID_PRIORITY"},
+		{"no project", `{"title":"x","project_id":42}`, 404, "PROJECT_NOT_FOUND"},
+		{"no parent", `{"title":"x","parent_id":42}`, 404, "TASK_NOT_FOUND"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			do(t, h, "POST", "/tasks", tt.body).expect(t, tt.status, tt.code)
+		})
+	}
+}
 
-// 	ct := rec.Header().Get("Content-Type")
+func TestGetTask(t *testing.T) {
+	h, _ := newTestServer(t)
+	parent := createTask(t, h, `{"title":"parent"}`)
+	createTask(t, h, `{"title":"sub","parent_id":1}`)
 
-// 	if ct != "application/json" { //проверяем что в заголовке Content-Type стоит application/json
-// 		t.Fatalf("expected Content-Type application/json, got %s", rec.Header().Get("Content-Type"))
-// 	}
+	res := do(t, h, "GET", "/tasks/1", "")
+	res.expect(t, 200, "")
+	var got model.Task
+	res.decode(t, &got)
+	if got.ID != parent.ID || len(got.Subtasks) != 1 || got.SubtaskStats == nil || got.SubtaskStats.Total != 1 {
+		t.Fatalf("got %+v", got)
+	}
 
-// 	var ErrResponse ErrorResponse
+	res = do(t, h, "GET", "/tasks/2", "")
+	res.expect(t, 200, "")
+	if !strings.Contains(res.Body.String(), `"subtasks":[]`) {
+		t.Fatalf("у задачи без подзадач нет subtasks: []: %s", res.Body.String())
+	}
 
-// 	err := json.Unmarshal(rec.Body.Bytes(), &ErrResponse)
-// 	if err != nil {
-// 		t.Fatalf("failed to unmarshal response body: %v", err)
-// 	}
+	do(t, h, "GET", "/tasks/99999999999", "").expect(t, 400, "INVALID_ID")
+	do(t, h, "GET", "/tasks/abc", "").expect(t, 400, "INVALID_ID")
+	do(t, h, "GET", "/tasks/0", "").expect(t, 400, "INVALID_ID")
+	do(t, h, "GET", "/tasks/999", "").expect(t, 404, "TASK_NOT_FOUND")
+}
 
-// 	if ErrResponse.Code != "EMPTY_TITLE" {
-// 		t.Fatalf("expected error code EMPTY_TITLE, got %s", ErrResponse.Code)
-// 	}
+func TestListTasks(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"a","scheduled_for":"2026-09-21"}`)
+	createTask(t, h, `{"title":"b","due_date":"2026-09-20"}`)
+	createTask(t, h, `{"title":"c"}`)
+	createTask(t, h, `{"title":"sub","parent_id":1}`)
 
-// 	tasks, err := store.Load()
-// 	if err != nil {
-// 		t.Fatalf("failed to load tasks")
-// 	}
+	list := func(t *testing.T, query string) ListTasksResponse {
+		t.Helper()
+		res := do(t, h, "GET", "/tasks"+query, "")
+		res.expect(t, 200, "")
+		var out ListTasksResponse
+		res.decode(t, &out)
+		return out
+	}
 
-// 	for _, ts := range tasks {
-// 		if ts.ID != 1 {
-// 			t.Fatalf("expected id task 1, got %d", ts.ID)
-// 		}
-// 	}
+	all := list(t, "")
+	if all.Total != 3 || len(all.Items) != 3 {
+		t.Fatalf("all: total %d, items %d", all.Total, len(all.Items))
+	}
+	if s := all.Items[0].SubtaskStats; s == nil || s.Total != 1 {
+		t.Fatalf("subtask_stats = %+v", s)
+	}
+	if today := list(t, "?view=today&today=2026-09-21"); today.Total != 1 || today.Items[0].Title != "a" {
+		t.Fatalf("today = %+v", today)
+	}
+	if overdue := list(t, "?view=overdue&today=2026-09-21"); overdue.Total != 1 || overdue.Items[0].Title != "b" {
+		t.Fatalf("overdue = %+v", overdue)
+	}
+	if page := list(t, "?limit=1&offset=1"); page.Total != 3 || len(page.Items) != 1 || page.Items[0].Title != "b" {
+		t.Fatalf("page = %+v", page)
+	}
 
-// }
+	// пустая выдача — [] а не null, чтобы фронту не проверять
+	res := do(t, h, "GET", "/tasks?view=archive", "")
+	res.expect(t, 200, "")
+	if !strings.Contains(res.Body.String(), `"items":[]`) {
+		t.Fatalf("body = %s", res.Body.String())
+	}
 
-// func TestDeleteToDo(t *testing.T) {
-// 	h, store := http_info()
+	for _, tc := range []struct{ query, code string }{
+		{"?view=someday", "INVALID_VIEW"},
+		{"?view=project", "INVALID_QUERY"},
+		{"?today=21.09.2026", "INVALID_DATE"},
+		{"?limit=ten", "INVALID_QUERY"},
+		{"?done=maybe", "INVALID_QUERY"},
+		{"?sort=title", "INVALID_QUERY"},
+		{"?from=2026-09-01", "INVALID_QUERY"},
+	} {
+		t.Run(tc.query, func(t *testing.T) {
+			do(t, h, "GET", "/tasks"+tc.query, "").expect(t, 400, tc.code)
+		})
+	}
+}
 
-// 	req := httptest.NewRequest(http.MethodDelete, "/todos/1", nil)
-// 	rec := httptest.NewRecorder()
+func TestPatchTask(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"task","due_date":"2026-10-04","scheduled_for":"2026-09-21"}`)
+	createTask(t, h, `{"title":"parent"}`)
+	createTask(t, h, `{"title":"sub","parent_id":2}`)
 
-// 	h.Todos(rec, req)
+	res := do(t, h, "PATCH", "/tasks/1", `{"due_date":null,"note":"заметка"}`)
+	res.expect(t, 200, "")
+	var got model.Task
+	res.decode(t, &got)
+	if got.DueDate != nil || got.ScheduledFor == nil || got.Note == nil || *got.Note != "заметка" {
+		t.Fatalf("null должен очистить due_date, отсутствие ключа — не трогать scheduled_for: %+v", got)
+	}
+	// в JSON null, а не пропущенное поле
+	if !strings.Contains(res.Body.String(), `"due_date":null`) {
+		t.Fatalf("body = %s", res.Body.String())
+	}
 
-// 	if rec.Code != http.StatusNoContent {
-// 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
-// 	}
+	do(t, h, "PATCH", "/tasks/1", `{"done":true}`).expect(t, 200, "")
 
-// 	tasks, err := store.Load()
-// 	if err != nil {
-// 		t.Fatalf("failed to load tasks")
-// 	}
+	tests := []struct {
+		name, path, body string
+		status           int
+		code             string
+	}{
+		{"already done", "/tasks/1", `{"done":true}`, 409, "ALREADY_DONE"},
+		{"title null", "/tasks/1", `{"title":null}`, 400, "INVALID_BODY"},
+		{"empty title", "/tasks/1", `{"title":" "}`, 400, "EMPTY_TITLE"},
+		{"nothing", "/tasks/1", `{}`, 400, "NOTHING_TO_UPDATE"},
+		{"bad date", "/tasks/1", `{"scheduled_for":"завтра"}`, 400, "INVALID_DATE"},
+		{"too deep", "/tasks/1", `{"parent_id":3}`, 400, "SUBTASK_TOO_DEEP"},
+		{"has subtasks", "/tasks/2", `{"parent_id":1}`, 400, "SUBTASK_TOO_DEEP"},
+		{"no project", "/tasks/1", `{"project_id":7}`, 404, "PROJECT_NOT_FOUND"},
+		{"not found", "/tasks/99", `{"title":"x"}`, 404, "TASK_NOT_FOUND"},
+		{"bad id", "/tasks/x", `{"title":"x"}`, 400, "INVALID_ID"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			do(t, h, "PATCH", tt.path, tt.body).expect(t, tt.status, tt.code)
+		})
+	}
 
-// 	for _, ts := range tasks {
-// 		if ts.ID == 1 {
-// 			t.Fatalf("expected id tasks 1, got %d", ts.ID)
-// 		}
-// 	}
+	do(t, h, "PATCH", "/tasks/1", `{"done":false}`).expect(t, 200, "")
+	do(t, h, "PATCH", "/tasks/1", `{"done":false}`).expect(t, 409, "ALREADY_UNDONE")
+}
 
-// }
+func TestDeleteTask(t *testing.T) {
+	h, repo := newTestServer(t)
+	createTask(t, h, `{"title":"parent"}`)
+	createTask(t, h, `{"title":"sub","parent_id":1}`)
 
-// func TestSetDone(t *testing.T) {
-// 	store := &storage.FakeStorage{
-// 		List: []model.Task{
-// 			{ID: 1, Title: "Task 1", Done: false},
-// 			{ID: 2, Title: "Task 2", Done: true},
-// 		},
-// 	}
-// 	service := service.NewFakeTaskService(store)
-// 	h := NewHandler(service)
+	do(t, h, "DELETE", "/tasks/1", "").expect(t, 204, "")
+	if len(repo.Tasks) != 0 {
+		t.Fatalf("подзадачи не удалились каскадом: %+v", repo.Tasks)
+	}
+	do(t, h, "DELETE", "/tasks/1", "").expect(t, 404, "TASK_NOT_FOUND")
+	do(t, h, "DELETE", "/tasks/abc", "").expect(t, 400, "INVALID_ID")
+}
 
-// 	req := httptest.NewRequest(http.MethodPut, "/todos/1/done", nil)
-// 	rec := httptest.NewRecorder()
+func TestReorderAndClear(t *testing.T) {
+	h, repo := newTestServer(t)
+	createTask(t, h, `{"title":"a"}`)
+	createTask(t, h, `{"title":"b"}`)
 
-// 	h.Todos(rec, req)
+	do(t, h, "POST", "/tasks/reorder", `{"scope":{"type":"inbox"},"ids":[2,1,77]}`).expect(t, 204, "")
+	if repo.Tasks[1].Position != 0 || repo.Tasks[0].Position != 1 {
+		t.Fatalf("positions: %d, %d", repo.Tasks[0].Position, repo.Tasks[1].Position)
+	}
+	do(t, h, "POST", "/tasks/reorder", `{"scope":{"type":"week"},"ids":[1]}`).expect(t, 400, "INVALID_BODY")
+	do(t, h, "POST", "/tasks/reorder", `{"scope":{"type":"day","date":"x"},"ids":[1]}`).expect(t, 400, "INVALID_DATE")
 
-// 	if rec.Code != http.StatusNoContent {
-// 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
-// 	}
+	do(t, h, "POST", "/tasks/clear", "").expect(t, 204, "")
+	if len(repo.Tasks) != 0 {
+		t.Fatal("clear не очистил задачи")
+	}
+}
 
-// 	tasks, err := store.Load()
-// 	if err != nil {
-// 		t.Fatalf("failed to load tasks")
-// 	}
+func TestProjects(t *testing.T) {
+	h, _ := newTestServer(t)
 
-// 	for _, ts := range tasks {
-// 		if ts.ID == 1 {
-// 			if !ts.Done {
-// 				t.Fatalf("expected task 1 to be done, got %v", ts.Done)
-// 			}
-// 			if ts.DoneAt == nil {
-// 				t.Fatalf("expected task 1 to have DoneAt set, got nil")
-// 			}
-// 		}
-// 	}
-// }
+	res := do(t, h, "POST", "/projects", `{"name":"Go","color":"#6AA6FF"}`)
+	res.expect(t, 201, "")
+	var p model.Project
+	res.decode(t, &p)
+	do(t, h, "POST", "/projects", `{"name":"Учёба"}`).expect(t, 201, "")
+	createTask(t, h, `{"title":"x","project_id":1,"due_date":"2026-09-01"}`)
 
-// func TestSetDoneabc(t *testing.T) {
-// 	store := &storage.FakeStorage{
-// 		List: []model.Task{
-// 			{ID: 1, Title: "Task 1", Done: false},
-// 			{ID: 2, Title: "Task 2", Done: true},
-// 		},
-// 	}
-// 	service := service.NewFakeTaskService(store)
-// 	h := NewHandler(service)
+	res = do(t, h, "GET", "/projects?today=2026-09-21", "")
+	res.expect(t, 200, "")
+	var list []model.Project
+	res.decode(t, &list)
+	if len(list) != 2 || list[0].Counts == nil || *list[0].Counts != (model.ProjectCounts{Active: 1, Overdue: 1}) {
+		t.Fatalf("list = %+v", list)
+	}
 
-// 	req := httptest.NewRequest(http.MethodPut, "/todos/1/abc", nil)
-// 	rec := httptest.NewRecorder()
+	res = do(t, h, "PATCH", "/projects/1", `{"archived":true}`)
+	res.expect(t, 200, "")
+	res.decode(t, &p)
+	if !p.Archived || p.Name != "Go" {
+		t.Fatalf("patch = %+v", p)
+	}
+	res = do(t, h, "GET", "/projects", "")
+	res.decode(t, &list)
+	if len(list) != 1 {
+		t.Fatalf("архивный список в выдаче по умолчанию: %+v", list)
+	}
+	res = do(t, h, "GET", "/projects?archived=true", "")
+	res.decode(t, &list)
+	if len(list) != 2 {
+		t.Fatalf("archived=true: %d", len(list))
+	}
 
-// 	h.Todos(rec, req)
+	do(t, h, "POST", "/projects/reorder", `{"ids":[2,1]}`).expect(t, 204, "")
 
-// 	if rec.Code != http.StatusBadRequest {
-// 		t.Fatalf("expected status %d, got %d", http.StatusNoContent, rec.Code)
-// 	}
+	for _, tc := range []struct {
+		method, path, body string
+		status             int
+		code               string
+	}{
+		{"POST", "/projects", `{"name":""}`, 400, "EMPTY_NAME"},
+		{"POST", "/projects", `{"name":"x","color":"red"}`, 400, "INVALID_COLOR"},
+		{"PATCH", "/projects/1", `{"name":null}`, 400, "INVALID_BODY"},
+		{"PATCH", "/projects/1", `{}`, 400, "NOTHING_TO_UPDATE"},
+		{"PATCH", "/projects/99", `{"name":"x"}`, 404, "PROJECT_NOT_FOUND"},
+		{"DELETE", "/projects/99", ``, 404, "PROJECT_NOT_FOUND"},
+	} {
+		t.Run(tc.method+tc.path+tc.body, func(t *testing.T) {
+			do(t, h, tc.method, tc.path, tc.body).expect(t, tc.status, tc.code)
+		})
+	}
 
-// 	tasks, err := store.Load()
-// 	if err != nil {
-// 		t.Fatalf("failed to load tasks: %v", err)
-// 	}
+	do(t, h, "DELETE", "/projects/1", "").expect(t, 204, "")
+	res = do(t, h, "GET", "/tasks/1", "")
+	var task model.Task
+	res.decode(t, &task)
+	if task.ProjectID != nil {
+		t.Fatalf("задача не ушла во «Входящие»: %v", *task.ProjectID)
+	}
+}
 
-// 	for _, ts := range tasks {
-// 		if ts.ID == 1 {
-// 			if ts.Done {
-// 				t.Fatalf("expected task 1 to be undone, got %v", ts.Done)
-// 			}
-// 			if ts.DoneAt != nil {
-// 				t.Fatalf("expected task 1 to not have DoneAt set, got not nil")
-// 			}
-// 		}
-// 	}
-// }
+func TestDayEndpoints(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"planned","scheduled_for":"2026-09-21"}`)
+	createTask(t, h, `{"title":"overdue","due_date":"2026-09-20"}`)
+	createTask(t, h, `{"title":"soon","due_date":"2026-09-25"}`)
+
+	res := do(t, h, "GET", "/day?date=2026-09-21", "")
+	res.expect(t, 200, "")
+	var day service.Day
+	res.decode(t, &day)
+	if day.Date.String() != "2026-09-21" || len(day.Planned) != 1 || len(day.Overdue) != 1 ||
+		day.Counts != (service.DayCounts{Planned: 1, Overdue: 1}) {
+		t.Fatalf("day = %+v", day)
+	}
+	for _, key := range []string{`"carry_over":[]`, `"done_today":[]`} {
+		if !strings.Contains(res.Body.String(), key) {
+			t.Fatalf("нет %s в %s", key, res.Body.String())
+		}
+	}
+
+	res = do(t, h, "GET", "/day/suggestions?date=2026-09-21", "")
+	res.expect(t, 200, "")
+	var sug service.Suggestions
+	res.decode(t, &sug)
+	if len(sug.Overdue) != 1 || len(sug.DueSoon) != 1 {
+		t.Fatalf("suggestions = %+v", sug)
+	}
+
+	do(t, h, "POST", "/day/plan", `{"date":"2026-09-21","add":[2,3],"remove":[1]}`).expect(t, 204, "")
+	res = do(t, h, "GET", "/day?date=2026-09-21", "")
+	res.decode(t, &day)
+	if len(day.Planned) != 2 || day.Planned[0].Title != "overdue" {
+		t.Fatalf("после plan: %+v", day.Planned)
+	}
+
+	do(t, h, "GET", "/day?date=21.09", "").expect(t, 400, "INVALID_DATE")
+	do(t, h, "POST", "/day/plan", `{"add":[1]}`).expect(t, 400, "INVALID_BODY")
+
+	do(t, h, "PATCH", "/tasks/1", `{"done":true}`).expect(t, 200, "")
+	res = do(t, h, "GET", "/stats/activity", "")
+	res.expect(t, 200, "")
+	var activity []model.DayCount
+	res.decode(t, &activity)
+	if len(activity) != 1 || activity[0].Done != 1 {
+		t.Fatalf("activity = %+v", activity)
+	}
+	do(t, h, "GET", "/stats/activity?from=2026-09-22&to=2026-09-21", "").expect(t, 400, "INVALID_QUERY")
+}
+
+func TestRouting(t *testing.T) {
+	h, _ := newTestServer(t)
+	// чужой метод — 405 от самого ServeMux, неизвестный путь — 404
+	if res := do(t, h, "PUT", "/tasks/1", `{}`); res.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("PUT /tasks/1 = %d", res.Code)
+	}
+	if res := do(t, h, "GET", "/todos", ""); res.Code != http.StatusNotFound {
+		t.Fatalf("GET /todos = %d", res.Code)
+	}
+}

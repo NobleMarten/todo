@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"slices"
 	"testing"
 	"time"
 	"todo/internal/model"
@@ -108,7 +109,7 @@ func TestMigrate_EmptyDatabase(t *testing.T) {
 		t.Fatalf("up: %v", err)
 	}
 	repo := NewPostgresRepo(db)
-	task, err := repo.Create("первая", "medium")
+	task, err := repo.CreateTask(t.Context(), NewTask{Title: "первая", Priority: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,10 +118,40 @@ func TestMigrate_EmptyDatabase(t *testing.T) {
 	}
 }
 
+func TestMigrate_NullPriorityFixed(t *testing.T) {
+	db := openTestSchema(t)
+
+	// так выглядела живая база: priority доращивалась без NOT NULL
+	mustExec(t, db, `CREATE TABLE tasks (
+		id         SERIAL      PRIMARY KEY,
+		title      TEXT        NOT NULL,
+		done       BOOLEAN     NOT NULL DEFAULT false,
+		created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+		done_at    TIMESTAMPTZ,
+		priority   VARCHAR(10) DEFAULT 'low'
+	)`)
+	mustExec(t, db, `INSERT INTO tasks (title, priority) VALUES ('null', NULL), ('мусор', 'urgent'), ('ok', 'high')`)
+
+	if err := Migrate(db); err != nil {
+		t.Fatalf("up: %v", err)
+	}
+	items, _, err := NewPostgresRepo(db).ListTasks(t.Context(), TaskQuery{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := []string{}
+	for _, task := range items {
+		got = append(got, task.Priority)
+	}
+	if want := []string{"low", "low", "high"}; !slices.Equal(got, want) {
+		t.Fatalf("priority = %v, want %v", got, want)
+	}
+}
+
 func assertMigrated(t *testing.T, db *sql.DB) {
 	t.Helper()
 	repo := NewPostgresRepo(db)
-	tasks, err := repo.List()
+	tasks, _, err := repo.ListTasks(t.Context(), TaskQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}

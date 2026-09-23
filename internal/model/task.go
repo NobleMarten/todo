@@ -15,6 +15,7 @@ type Task struct {
 	Note         *string    `json:"note"`
 	CreatedAt    time.Time  `json:"created_at"`
 	DoneAt       *time.Time `json:"done_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`              // последняя правка через PATCH; reorder не считается
 	Subtasks     []Task     `json:"subtasks,omitempty"`      // только в GET /tasks/{id}
 	SubtaskStats *Stats     `json:"subtask_stats,omitempty"` // только у корневых задач в списках
 }
@@ -23,4 +24,10 @@ type Task struct {
 type Stats struct {
 	Done  int `json:"done"`
 	Total int `json:"total"`
+}
+
+// DayCount — сколько задач выполнено за календарный день (грид активности).
+type DayCount struct {
+	Date Date `json:"date"`
+	Done int  `json:"done"`
 }
