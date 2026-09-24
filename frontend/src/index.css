@@ -38,7 +38,8 @@ ul { list-style: none; }
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 0 16px;
+  /* в альбомной ориентации iPhone чёлка сбоку */
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
 }
 
 .container {
@@ -193,7 +194,6 @@ ul { list-style: none; }
 }
 .inline-error { margin: 8px 0; }
 
-.rows-loading,
 .sheet-loading,
 .subtasks-loading {
   display: flex;
@@ -209,6 +209,59 @@ ul { list-style: none; }
   color: var(--muted);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-card);
+}
+.empty-icon, .empty-title, .empty-hint { display: block; }
+.empty-icon { margin-bottom: 8px; font-size: 20px; color: var(--faint); }
+.empty-title { color: var(--text-dim); }
+.empty-hint { max-width: 340px; margin: 6px auto 0; font-size: 12.5px; color: var(--faint); }
+
+/* первая загрузка не удалась: вместо пустого экрана — что случилось и «повторить» */
+.error-state {
+  margin-top: 24px;
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+  color: var(--danger);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  background: var(--danger-soft);
+  border-radius: var(--radius-card);
+}
+.error-state-title { color: var(--text); font-weight: 500; }
+.error-state-text { font-size: 13px; color: var(--muted); }
+.error-state .btn { margin-top: 8px; }
+.error-state.crash { margin-top: calc(48px + env(safe-area-inset-top)); color: var(--text); }
+
+/* ── скелетоны ──────────────────────────────────────────────────────────────── */
+.skeleton-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 14px;
+  border-radius: var(--radius-row);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.skeleton-project .skeleton-row { min-height: 52px; }
+.skeleton {
+  display: block;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+.skeleton-check { width: 21px; height: 21px; border-radius: 50%; flex-shrink: 0; }
+.skeleton-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+.skeleton-line { height: 11px; border-radius: 6px; }
+.skeleton-block { margin-top: 16px; border-radius: var(--radius-card); }
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .45; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton { animation: none; }
 }
 
 .progress-track {
@@ -409,6 +462,50 @@ ul { list-style: none; }
 .task-list { display: flex; flex-direction: column; gap: 8px; }
 .reorder-item { position: relative; list-style: none; }
 
+/* ── свайпы строки: влево — «удалить», вправо — «на сегодня» ──────────────────── */
+.swipe { position: relative; border-radius: var(--radius-row); }
+.swipe-under {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  justify-content: space-between;
+  border-radius: var(--radius-row);
+  overflow: hidden;
+  /* левая половина видна при свайпе вправо, правая — влево */
+  background: linear-gradient(90deg, var(--accent-soft) 50%, var(--danger-soft) 50%);
+}
+.swipe-today {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+}
+.swipe-today svg, .swipe-delete svg { width: 14px; height: 14px; }
+.swipe-delete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  margin-left: auto;
+  background: var(--danger);
+  color: #0B0B0F;
+  font-size: 12px;
+  font-weight: 600;
+}
+.swipe-body {
+  position: relative;
+  /* вертикальная прокрутка — браузеру, горизонталь — свайпу (framer ставит это сам только без dragControls) */
+  touch-action: pan-y;
+  /* долгое нажатие на iOS не должно выделять текст и открывать меню посреди жеста */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
 /* ── строка задачи ──────────────────────────────────────────────────────────── */
 .task {
   border-radius: var(--radius-row);
@@ -504,6 +601,7 @@ ul { list-style: none; }
   cursor: grab;
   /* иначе на телефоне палец прокручивает страницу вместо перетаскивания */
   touch-action: none;
+  -webkit-touch-callout: none;
   flex-shrink: 0;
 }
 .grip:active { cursor: grabbing; }
@@ -594,12 +692,21 @@ ul { list-style: none; }
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
   /* по центру на широком экране, на всю ширину на телефоне */
   padding: 12px max(16px, calc((100% - 600px) / 2)) calc(22px + env(safe-area-inset-bottom));
   background: var(--surface-2);
   border-top: 1px solid var(--border);
 }
+.quick-add-row { display: flex; align-items: center; gap: 10px; }
+.quick-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+.quick-chip { min-height: 26px; gap: 6px; color: var(--text-dim); pointer-events: none; }
+.quick-chip svg { width: 11px; height: 11px; }
+.quick-chip.prio-high { color: var(--danger); }
+.quick-chip.prio-medium { color: var(--warn); }
+.check-sm { width: 10px; height: 10px; border-width: 2px; }
+.quick-hint { font-family: var(--mono); font-size: 11px; color: var(--ok); }
 .quick-add input {
   flex: 1;
   min-width: 0;
@@ -641,7 +748,8 @@ ul { list-style: none; }
   position: relative;
   width: 100%;
   max-width: 600px;
-  max-height: 94dvh;
+  /* статус-бар в PWA лежит поверх приложения (black-translucent) — шит под него не заезжает */
+  max-height: calc(100dvh - env(safe-area-inset-top) - 12px);
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 10px 16px calc(22px + env(safe-area-inset-bottom));
@@ -1017,18 +1125,13 @@ ul { list-style: none; }
   animation: fade-in var(--transition);
 }
 
-.activity-loading {
-  display: flex;
-  justify-content: center;
-  padding: 48px 0;
-  color: var(--muted);
-}
 
 .cal-stats {
-  display: flex;
-  gap: 20px;
+  /* четыре числа в одну строку и на 390 px: подписи переносятся, а не блоки */
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 20px;
-  flex-wrap: wrap;
 }
 .cal-stat {
   display: flex;

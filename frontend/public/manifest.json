@@ -1,14 +1,17 @@
 {
-    "name": "Todo",
-    "short_name": "Todo",
-    "icons": [
-      {
-        "src": "/pic.png",
-        "sizes": "1024x1024",
-        "type": "image/png"
-      }
-    ],
-    "theme_color": "#0c0c0e",
-    "background_color": "#0c0c0e",
-    "display": "standalone"
-  }
+  "name": "todo",
+  "short_name": "todo",
+  "lang": "ru",
+  "start_url": "/today",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#0B0B0F",
+  "background_color": "#0B0B0F",
+  "icons": [
+    {
+      "src": "/pic.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}

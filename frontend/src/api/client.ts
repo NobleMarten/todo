@@ -57,7 +57,30 @@ export async function request<T>(
   return data as T
 }
 
-/** Текст ошибки для показа пользователю. */
+// Бэкенд отдаёт message по-английски («task not found») — пользователю показываем текст по коду.
+const MESSAGES: Record<string, string> = {
+  NETWORK: 'нет связи с сервером',
+  TASK_NOT_FOUND: 'задача не найдена — возможно, её уже удалили',
+  PROJECT_NOT_FOUND: 'список не найден — возможно, его уже удалили',
+  EMPTY_TITLE: 'у задачи должен быть заголовок',
+  TITLE_TOO_LONG: 'слишком длинное название',
+  EMPTY_NAME: 'у списка должно быть название',
+  INVALID_COLOR: 'неверный цвет',
+  INVALID_PRIORITY: 'неизвестный приоритет',
+  INVALID_DATE: 'неверная дата',
+  SUBTASK_TOO_DEEP: 'у подзадачи не бывает своих подзадач',
+  ALREADY_DONE: 'задача уже выполнена',
+  ALREADY_UNDONE: 'задача уже в работе',
+  NOTHING_TO_UPDATE: 'нечего сохранять',
+}
+
+/** Текст ошибки для показа пользователю: по коду API, иначе по статусу, иначе fallback. */
 export function errorText(e: unknown, fallback = 'что-то пошло не так'): string {
-  return e instanceof Error && e.message ? e.message : fallback
+  if (e instanceof ApiError) {
+    const known = MESSAGES[e.code]
+    if (known) return known
+    if (e.status >= 500) return 'сервер не отвечает — попробуй ещё раз'
+    return fallback
+  }
+  return fallback
 }

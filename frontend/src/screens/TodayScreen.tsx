@@ -6,7 +6,9 @@ import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { TaskRow } from '../components/TaskRow'
 import { TaskRun } from '../components/TaskRun'
 import { useOpenTask } from '../components/TaskSheet'
-import { AlertIcon, ChevronIcon, PlusIcon, SpinIcon } from '../components/icons'
+import { ErrorState } from '../components/ErrorState'
+import { SkeletonBlock, SkeletonRows } from '../components/Skeleton'
+import { AlertIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useDay } from '../hooks/useDay'
 import { useProjects } from '../hooks/useProjects'
 import { dayHeading, shortDate } from '../lib/date'
@@ -17,8 +19,19 @@ import { PRIORITY_LABEL } from '../lib/format'
  * «просрочено» (дедлайн прошёл или вчера не доделал), план на день и свёрнутое «готово».
  */
 export function TodayScreen() {
-  const { day, loading, error, actionError, clearActionError, reload, toggle, update, moveToToday, reorderPlanned } =
-    useDay()
+  const {
+    day,
+    loading,
+    error,
+    actionError,
+    clearActionError,
+    reload,
+    toggle,
+    update,
+    remove,
+    moveToToday,
+    reorderPlanned,
+  } = useDay()
   const { all: projects } = useProjects()
   const [showDone, setShowDone] = useState(false)
 
@@ -33,14 +46,13 @@ export function TodayScreen() {
         </div>
         <ScreenHeader title="Сегодня" />
         {error ? (
-          <button className="error-bar" onClick={() => reload()}>
-            {error} · повторить
-          </button>
+          <ErrorState message={error} onRetry={() => reload()} />
         ) : (
           loading && (
-            <div className="rows-loading">
-              <SpinIcon />
-            </div>
+            <>
+              <SkeletonBlock height={96} />
+              <SkeletonRows count={4} />
+            </>
           )
         )}
       </div>
@@ -101,6 +113,8 @@ export function TodayScreen() {
                   alert
                   onToggle={() => toggle(t)}
                   onSetDue={(d) => update(t.id, { due_date: d })}
+                  onDelete={() => remove(t.id)}
+                  onToday={() => moveToToday([t.id])}
                 />
               </li>
             ))}
@@ -110,7 +124,8 @@ export function TodayScreen() {
 
       {!focus ? (
         <div className="empty today-empty">
-          <span>на сегодня ничего не запланировано</span>
+          <span className="empty-title">на сегодня ничего не запланировано</span>
+          <span className="empty-hint">возьми пару задач из списков — просроченное и дедлайны недели подскажут</span>
           <Link to="/plan" className="btn btn-primary">
             собрать день
           </Link>
@@ -127,6 +142,7 @@ export function TodayScreen() {
               onToggle={toggle}
               onSetDue={(t, d) => update(t.id, { due_date: d })}
               onReorder={(ids) => reorderPlanned([focus.id, ...ids])}
+              onDelete={(t) => remove(t.id)}
             />
           )}
           <Link to="/plan" className="new-project plan-more">

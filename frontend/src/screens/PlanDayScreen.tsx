@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { errorText } from '../api/client'
 import type { Project, Task } from '../api/types'
 import { ScreenHeader } from '../components/ScreenHeader'
-import { CheckIcon, PlusIcon, SpinIcon } from '../components/icons'
+import { ErrorState } from '../components/ErrorState'
+import { SkeletonRows } from '../components/Skeleton'
+import { CheckIcon, PlusIcon } from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
 import { useSuggestions } from '../hooks/useDay'
 import { daysBetween, shortDate, toDateStr } from '../lib/date'
@@ -59,19 +61,14 @@ export function PlanDayScreen() {
         <p className="plan-hint">выбери 5–7 задач — остальные останутся в списках и не будут мозолить глаза</p>
       </ScreenHeader>
 
-      {error && (
-        <button className="error-bar" onClick={() => reload()}>
-          {error} · повторить
-        </button>
-      )}
-
       {loading && !s ? (
-        <div className="rows-loading">
-          <SpinIcon />
-        </div>
+        <SkeletonRows count={5} />
+      ) : error && !s ? (
+        <ErrorState message={error} onRetry={() => reload()} />
       ) : empty ? (
         <div className="empty">
-          предложить нечего: просроченного нет, дедлайнов на неделе нет, всё без дат трогали недавно
+          <span className="empty-title">предложить нечего</span>
+          <span className="empty-hint">просроченного нет, дедлайнов на неделе нет, всё без дат трогали недавно</span>
         </div>
       ) : (
         s && (

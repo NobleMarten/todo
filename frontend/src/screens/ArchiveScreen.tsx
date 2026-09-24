@@ -2,6 +2,8 @@ import type { Task } from '../api/types'
 import { Activity } from '../components/Activity'
 import { DoneRow } from '../components/DoneRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
+import { ErrorState } from '../components/ErrorState'
+import { SkeletonRows } from '../components/Skeleton'
 import { SpinIcon } from '../components/icons'
 import { useActivity } from '../hooks/useActivity'
 import { useProjects } from '../hooks/useProjects'
@@ -30,7 +32,7 @@ export function ArchiveScreen() {
         onReload={activity.reload}
       />
 
-      {archive.error && (
+      {archive.error && archive.items.length > 0 && (
         <button className="error-bar" onClick={() => archive.reload()}>
           {archive.error} · повторить
         </button>
@@ -42,12 +44,16 @@ export function ArchiveScreen() {
       )}
 
       {archive.loading && archive.items.length === 0 ? (
-        <div className="rows-loading">
-          <SpinIcon />
-        </div>
+        <SkeletonRows count={5} />
+      ) : archive.error && archive.items.length === 0 ? (
+        <ErrorState message={archive.error} onRetry={() => archive.reload()} />
       ) : (
-        !archive.error &&
-        archive.items.length === 0 && <div className="empty">выполненных задач пока нет</div>
+        archive.items.length === 0 && (
+          <div className="empty">
+            <span className="empty-title">выполненных задач пока нет</span>
+            <span className="empty-hint">отметь задачу — она появится здесь, а в гриде загорится квадратик</span>
+          </div>
+        )
       )}
 
       {byDay(archive.items).map(([day, tasks]) => (

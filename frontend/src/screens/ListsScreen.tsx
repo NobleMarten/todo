@@ -4,7 +4,8 @@ import type { Project } from '../api/types'
 import { ColorSwatches } from '../components/ProjectPicker'
 import { ProjectRow } from '../components/ProjectRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
-import { AlertIcon, ChevronIcon, LinesIcon, MoonIcon, PlusIcon, SpinIcon, SunIcon, TargetIcon, WeekIcon } from '../components/icons'
+import { SkeletonRows } from '../components/Skeleton'
+import { AlertIcon, ChevronIcon, LinesIcon, MoonIcon, PlusIcon, SunIcon, TargetIcon, WeekIcon } from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
 import { useSmartCounts } from '../hooks/useTasks'
 import type { Theme } from '../hooks/useTheme'
@@ -77,9 +78,7 @@ export function ListsScreen({ theme, onToggleTheme }: Props) {
         <div className="rows">
           <ProjectRow to="/lists/inbox" name="входящие" color={null} active={counts?.inbox} />
           {loading && projects.length === 0 ? (
-            <div className="rows-loading">
-              <SpinIcon />
-            </div>
+            <SkeletonRows count={4} variant="project" />
           ) : (
             projects.map((p) => (
               <ProjectRow

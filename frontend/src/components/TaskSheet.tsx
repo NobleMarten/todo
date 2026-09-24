@@ -1,6 +1,7 @@
 import { useCallback, useState, type CSSProperties } from 'react'
 import { useLocation, useNavigate, type Location } from 'react-router-dom'
 import type { Priority, Task } from '../api/types'
+import { useAutosize } from '../hooks/useAutosize'
 import { useProjects } from '../hooks/useProjects'
 import { statsOf, useTask } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
@@ -232,6 +233,7 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
 function TitleEditor({ title, done, onSave }: { title: string; done: boolean; onSave: (t: string) => void }) {
   const [draft, setDraft] = useState(title)
   const [prevTitle, setPrevTitle] = useState(title)
+  const ref = useAutosize(draft)
   if (title !== prevTitle) {
     // заголовок сменился снаружи (сохранение, перечитывание) — подтягиваем
     setPrevTitle(title)
@@ -246,6 +248,7 @@ function TitleEditor({ title, done, onSave }: { title: string; done: boolean; on
 
   return (
     <textarea
+      ref={ref}
       className={`card-title ${done ? 'done' : ''}`}
       value={draft}
       rows={1}
@@ -266,6 +269,7 @@ function TitleEditor({ title, done, onSave }: { title: string; done: boolean; on
 function NoteEditor({ note, onSave }: { note: string | null; onSave: (n: string | null) => void }) {
   const [draft, setDraft] = useState(note ?? '')
   const [prevNote, setPrevNote] = useState(note)
+  const ref = useAutosize(draft)
   if (note !== prevNote) {
     setPrevNote(note)
     setDraft(note ?? '')
@@ -273,6 +277,7 @@ function NoteEditor({ note, onSave }: { note: string | null; onSave: (n: string 
 
   return (
     <textarea
+      ref={ref}
       className="card-note"
       value={draft}
       rows={3}

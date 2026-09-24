@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import { getDay, getSuggestions, planDay } from '../api/day'
-import { patchTask, reorderTasks } from '../api/tasks'
+import { deleteTask, patchTask, reorderTasks } from '../api/tasks'
 import type { DateStr, Day, Suggestions, Task, TaskPatch } from '../api/types'
 import { todayStr } from '../lib/date'
 import { notifyChanged, subscribeChanges } from '../lib/sync'
@@ -130,6 +130,12 @@ export function useDay() {
     [run],
   )
 
+  /** Удалить (свайп влево): задача сразу пропадает из своего блока. */
+  const remove = useCallback(
+    (id: number) => run((d) => without(d, new Set([id])), () => deleteTask(id)),
+    [run],
+  )
+
   /** «Перенести на сегодня»: одним POST /day/plan, задачи встают в конец плана. */
   const moveToToday = useCallback(
     (ids: number[]) => {
@@ -170,6 +176,7 @@ export function useDay() {
     reload: load,
     toggle,
     update,
+    remove,
     moveToToday,
     reorderPlanned,
   }

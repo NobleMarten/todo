@@ -1,40 +1,96 @@
-import { useState, type FormEvent } from 'react'
-import { TITLE_MAX } from '../lib/format'
-import { PlusIcon, SpinIcon } from './icons'
+import { useEffect, useState, type FormEvent } from 'react'
+import type { Project } from '../api/types'
+import { shortDate, todayStr } from '../lib/date'
+import { PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
+import { parseQuickAdd, type QuickParse } from '../lib/quickAdd'
+import { CalendarIcon, PlusIcon, SpinIcon } from './icons'
 
 interface Props {
   placeholder: string
   label: string
-  onAdd: (title: string) => Promise<boolean>
+  projects: Project[] // куда можно попасть через #имя
+  /** null — не получилось (ошибку показывает экран); hint — куда ушла задача, если не в этот вид. */
+  onAdd: (p: QuickParse) => Promise<{ hint?: string } | null>
 }
 
-/** Поле быстрого добавления, пристыкованное к низу экрана списка (макет B2). Разбор #списка/!приоритета/дат — Этап 5. */
-export function QuickAdd({ placeholder, label, onAdd }: Props) {
-  const [title, setTitle] = useState('')
+/**
+ * Поле быстрого добавления, пристыкованное к низу экрана списка (макет B2).
+ * Разбор #списка, !приоритета и дедлайна — lib/quickAdd; распознанное показывается чипами до отправки.
+ */
+export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
+  const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
+  const parsed = parseQuickAdd(text, projects, todayStr())
+  const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate)
+
+  // подсказка «добавлено в …» живёт пару секунд
+  useEffect(() => {
+    if (!hint) return
+    const t = setTimeout(() => setHint(null), 2500)
+    return () => clearTimeout(t)
+  }, [hint])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    const t = title.trim()
-    if (!t || busy) return
+    if (!parsed.title || busy) return
     setBusy(true)
-    if (await onAdd(t)) setTitle('')
+    const res = await onAdd(parsed)
+    if (res) {
+      setText('')
+      setHint(res.hint ?? null)
+    }
     setBusy(false)
   }
 
   return (
     <form className="quick-add" onSubmit={submit}>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={placeholder}
-        aria-label={label}
-        maxLength={TITLE_MAX}
-        enterKeyHint="done"
-      />
-      <button type="submit" className="quick-add-btn" disabled={!title.trim() || busy} aria-label="добавить задачу">
-        {busy ? <SpinIcon /> : <PlusIcon />}
-      </button>
+      {(hasChips || hint) && (
+        <div className="quick-chips" aria-live="polite">
+          {hasChips ? (
+            <>
+              {parsed.project && (
+                <span className="chip chip-mono quick-chip">
+                  <span className="dot" style={{ background: parsed.project.color }} />
+                  {parsed.project.name}
+                </span>
+              )}
+              {parsed.priority && (
+                <span className={`chip chip-mono quick-chip prio-${parsed.priority}`}>
+                  <span className={`check check-sm prio-${parsed.priority}`} />
+                  {PRIORITY_LABEL[parsed.priority]}
+                </span>
+              )}
+              {parsed.dueDate && (
+                <span className="chip chip-mono quick-chip">
+                  <CalendarIcon />
+                  дедлайн {shortDate(parsed.dueDate)}
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="quick-hint">{hint}</span>
+          )}
+        </div>
+      )}
+      <div className="quick-add-row">
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder={placeholder}
+          aria-label={label}
+          maxLength={TITLE_MAX + 40} // служебные слова вырезаются, лимит заголовка проверяем по разобранному
+          enterKeyHint="done"
+        />
+        <button
+          type="submit"
+          className="quick-add-btn"
+          disabled={!parsed.title || parsed.title.length > TITLE_MAX || busy}
+          aria-label="добавить задачу"
+        >
+          {busy ? <SpinIcon /> : <PlusIcon />}
+        </button>
+      </div>
     </form>
   )
 }

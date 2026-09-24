@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DayCounts } from '../hooks/useActivity'
 import { dateKey, pluralTasks } from '../lib/format'
-import { SpinIcon } from './icons'
+import { SkeletonBlock } from './Skeleton'
 
 interface Props {
   counts: DayCounts
@@ -152,14 +152,11 @@ export function Activity({ counts, loading, error, onReload }: Props) {
   return (
     <section className="activity" aria-label="Активность по дням">
       {loading ? (
-        <div className="activity-loading">
-          <SpinIcon />
-        </div>
+        <SkeletonBlock height={190} />
       ) : error ? (
-        <div className="error-bar" role="alert">
-          <span>⚠ {error}</span>
-          <button onClick={onReload}>↻ retry</button>
-        </div>
+        <button className="error-bar" role="alert" onClick={onReload}>
+          {error} · повторить
+        </button>
       ) : stats.total === 0 ? (
         <div className="empty">
           <span className="empty-icon">◫</span>

@@ -1,12 +1,15 @@
+import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
 import { hidesTabBar, TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
-import { useTheme } from './hooks/useTheme'
+import { useTheme, type Theme } from './hooks/useTheme'
 import { ArchiveScreen } from './screens/ArchiveScreen'
 import { ListsScreen } from './screens/ListsScreen'
 import { PlanDayScreen } from './screens/PlanDayScreen'
 import { ProjectScreen } from './screens/ProjectScreen'
 import { TodayScreen } from './screens/TodayScreen'
+
+const THEME_BG: Record<Theme, string> = { dark: '#0B0B0F', light: '#F6F6F8' }
 
 /**
  * Маршруты. /task/:id — шит поверх экрана, с которого его открыли (location.state.background);
@@ -14,6 +17,11 @@ import { TodayScreen } from './screens/TodayScreen'
  */
 export default function App() {
   const { theme, toggle } = useTheme()
+
+  // цвет статус-бара и панели браузера — под выбранную тему, а не под системную (= --bg из theme.css)
+  useEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', THEME_BG[theme])
+  }, [theme])
   const location = useLocation()
   const navigate = useNavigate()
   const taskMatch = useMatch('/task/:id')

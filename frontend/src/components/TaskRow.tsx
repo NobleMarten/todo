@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DragControls } from 'framer-motion'
 import type { DateStr, Project, Task } from '../api/types'
 import { useTask } from '../hooks/useTasks'
@@ -6,6 +6,7 @@ import { shortDate } from '../lib/date'
 import { PRIORITY_LABEL } from '../lib/format'
 import { NativeDateInput } from './DatePicker'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
+import { SwipeRow } from './SwipeRow'
 import { useOpenTask } from './TaskSheet'
 import { CalendarIcon, CheckIcon, GripIcon, SpinIcon } from './icons'
 
@@ -18,13 +19,26 @@ interface Props {
   alert?: boolean // красная рамка и без дедлайна: блок «просрочено» на «Сегодня» (вчера не доделал)
   onToggle: () => void
   onSetDue: (d: DateStr | null) => void
+  onDelete?: () => void // свайп влево
+  onToday?: () => void // свайп вправо; у задачи, уже стоящей на сегодня, не предлагается
 }
 
 /**
  * Строка задачи (макет B2): круглый чекбокс цвета приоритета, заголовок, справа бейджи —
  * прогресс подзадач (раскрывает их) и дата. Без дат — кнопка «назначить дедлайн».
  */
-export function TaskRow({ task, today, project, dragControls, gripSpace, alert, onToggle, onSetDue }: Props) {
+export function TaskRow({
+  task,
+  today,
+  project,
+  dragControls,
+  gripSpace,
+  alert,
+  onToggle,
+  onSetDue,
+  onDelete,
+  onToday,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
   const openTask = useOpenTask()
   const stats = task.subtask_stats
@@ -54,7 +68,7 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, alert, 
     )
   }
 
-  return (
+  const row = (
     <div className={`task ${task.done ? 'done' : ''} ${red ? 'overdue' : ''}`}>
       <div className="task-row">
         <button
@@ -94,16 +108,7 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, alert, 
         </span>
 
         {dragControls ? (
-          <span
-            className="grip"
-            onPointerDown={(e) => {
-              e.preventDefault()
-              dragControls.start(e)
-            }}
-            aria-hidden="true"
-          >
-            <GripIcon />
-          </span>
+          <Grip controls={dragControls} />
         ) : (
           gripSpace && <span className="grip-space" aria-hidden="true" />
         )}
@@ -111,6 +116,42 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, alert, 
 
       {expanded && <SubtaskPanel parentId={task.id} dueDate={task.due_date} />}
     </div>
+  )
+
+  if (!onDelete && !onToday) return row
+  return (
+    <SwipeRow
+      title={task.title}
+      onDelete={onDelete}
+      onToday={onToday && task.scheduled_for !== today && !task.done ? onToday : undefined}
+    >
+      {row}
+    </SwipeRow>
+  )
+}
+
+/**
+ * Ручка перетаскивания. Слушатель нативный: строка внутри SwipeRow сама слушает pointerdown
+ * (drag="x"), а React-обработчик сработал бы уже после неё — и строка поехала бы вбок.
+ */
+function Grip({ controls }: { controls: DragControls }) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onDown = (e: PointerEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      controls.start(e)
+    }
+    el.addEventListener('pointerdown', onDown)
+    return () => el.removeEventListener('pointerdown', onDown)
+  }, [controls])
+
+  return (
+    <span className="grip" ref={ref} aria-hidden="true">
+      <GripIcon />
+    </span>
   )
 }
 

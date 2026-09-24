@@ -11,13 +11,25 @@ export interface RunProps {
   onToggle: (t: Task) => void
   onSetDue: (t: Task, d: DateStr | null) => void
   onReorder: (ids: number[]) => void
+  onDelete?: (t: Task) => void
+  onToday?: (t: Task) => void
 }
 
 /**
  * Отрезок строк задач, который можно перетаскивать целиком (framer-motion Reorder).
  * Порядок меняется локально, а onReorder получает новый порядок отрезка только при отпускании.
  */
-export function TaskRun({ run, today, draggable, projectById, onToggle, onSetDue, onReorder }: RunProps) {
+export function TaskRun({
+  run,
+  today,
+  draggable,
+  projectById,
+  onToggle,
+  onSetDue,
+  onReorder,
+  onDelete,
+  onToday,
+}: RunProps) {
   const [order, setOrder] = useState<number[] | null>(null) // порядок во время перетаскивания
   const orderRef = useRef<number[] | null>(null)
   const byId = new Map(run.map((t) => [t.id, t]))
@@ -29,6 +41,8 @@ export function TaskRun({ run, today, draggable, projectById, onToggle, onSetDue
     project: t.project_id !== null ? projectById?.get(t.project_id) : undefined,
     onToggle: () => onToggle(t),
     onSetDue: (d: DateStr | null) => onSetDue(t, d),
+    onDelete: onDelete && (() => onDelete(t)),
+    onToday: onToday && (() => onToday(t)),
   })
 
   if (!draggable || run.length < 2) {

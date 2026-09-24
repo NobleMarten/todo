@@ -6,11 +6,17 @@ import { QuickAdd } from '../components/QuickAdd'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { Sheet } from '../components/Sheet'
 import { TaskRun } from '../components/TaskRun'
-import { MoreIcon, SpinIcon, TrashIcon } from '../components/icons'
+import { ErrorState } from '../components/ErrorState'
+import { SkeletonRows } from '../components/Skeleton'
+import { MoreIcon, TrashIcon } from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
-import { reorderScopeOf, useTasks, useWeekProgress, type ListSpec } from '../hooks/useTasks'
+import { matchesSpec, reorderScopeOf, useTasks, useWeekProgress, type ListSpec } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
+import type { QuickParse } from '../lib/quickAdd'
 import { groupTasks, PROJECT_NAME_MAX, sectionsFor, type Grouping } from '../lib/format'
+
+// подсказка синтаксиса быстрого ввода в пустом списке
+const QUICK_ADD_HINT = 'в поле внизу: «#список», «!срочно» / «!важно», «завтра», «пт» или «25.09»'
 
 const SMART: Record<string, { spec: ListSpec; title: string; empty: string }> = {
   inbox: { spec: { view: 'inbox' }, title: 'входящие', empty: 'во входящих пусто' },
@@ -41,7 +47,7 @@ interface ViewProps {
 function ListView({ spec, smartTitle, emptyText }: ViewProps) {
   const navigate = useNavigate()
   const today = todayStr()
-  const { tasks, loading, error, actionError, clearActionError, reload, add, update, reorder } = useTasks(spec)
+  const { tasks, loading, error, actionError, clearActionError, reload, add, update, remove, reorder } = useTasks(spec)
   const projects = useProjects()
   const [grouping, setGrouping] = useState<Grouping>('date')
   const [menuOpen, setMenuOpen] = useState(false)
@@ -61,13 +67,18 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
   const title = smartTitle ?? project?.name ?? ''
   const canAdd = spec.view === 'project' || spec.view === 'inbox' || spec.view === 'all' || spec.view === 'today'
 
-  const addTask = async (t: string) => {
+  // #список из быстрого ввода важнее текущего списка; в «сегодня» задача ещё и планируется на сегодня
+  const addTask = async (p: QuickParse) => {
+    const target = p.project ?? project
     const created = await add({
-      title: t,
-      project_id: projectId,
+      title: p.title,
+      project_id: target ? target.id : projectId,
+      priority: p.priority,
+      due_date: p.dueDate,
       scheduled_for: spec.view === 'today' ? today : undefined,
     })
-    return created !== null
+    if (!created) return null
+    return matchesSpec(created, spec, today) ? {} : { hint: `добавлено в «${target?.name ?? 'входящие'}»` }
   }
 
   const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
@@ -123,11 +134,6 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
         </div>
       </ScreenHeader>
 
-      {error && (
-        <button className="error-bar" onClick={() => reload()}>
-          {error} · повторить
-        </button>
-      )}
       {actionError && (
         <button className="error-bar" onClick={clearActionError}>
           {actionError}
@@ -135,11 +141,14 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       )}
 
       {loading && tasks.length === 0 ? (
-        <div className="rows-loading">
-          <SpinIcon />
+        <SkeletonRows count={5} />
+      ) : error ? (
+        <ErrorState message={error} onRetry={() => reload()} />
+      ) : tasks.length === 0 ? (
+        <div className="empty">
+          <span className="empty-title">{emptyText ?? 'в списке пусто'}</span>
+          {canAdd && <span className="empty-hint">{QUICK_ADD_HINT}</span>}
         </div>
-      ) : tasks.length === 0 && !error ? (
-        <div className="empty">{emptyText ?? 'в списке пусто — добавь первую задачу'}</div>
       ) : (
         sectionsFor(grouping).map(({ key, label }) => {
           const list = groups.get(key) ?? []
@@ -159,6 +168,8 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
                   onToggle={(t) => update(t.id, { done: !t.done })}
                   onSetDue={(t, d) => update(t.id, { due_date: d })}
                   onReorder={reorder}
+                  onDelete={(t) => remove(t.id)}
+                  onToday={(t) => update(t.id, { scheduled_for: today })}
                 />
               ))}
             </section>
@@ -172,6 +183,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
             spec.view === 'today' ? 'задача на сегодня…' : project ? `задача в ${project.name}…` : 'задача во входящие…'
           }
           label={project ? `новая задача в списке ${project.name}` : 'новая задача'}
+          projects={projects.projects}
           onAdd={addTask}
         />
       )}

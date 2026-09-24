@@ -7,16 +7,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### Backend (Go, module `todo`)
 
 ```bash
-go run ./cmd/todo-api            # HTTP API (needs DB_URL; see Config below)
-go run ./cmd/todo-cli help       # CLI: help | list | add "title" | done ID | undone ID | del ID
-go build ./...
-go test ./...
-go test ./internal/service -run TestPatch_Done -v   # single test
+go run ./cmd/todo-api            # HTTP API (needs DB_URL; applies goose migrations on start)
+go build ./... && go vet ./... && go test ./...
+go test ./internal/service -run TestPatch -v                  # single test
+TEST_DB_URL=postgres://... go test ./internal/storage         # repo contract + migration tests against real Postgres
 ```
 
-Config comes from env (`internal/config`): `godotenv` loads `.envlocal`, falling back to `.env` (both gitignored; see `.env.example`). `DB_URL` is required — the API exits if it is missing. `PORT` defaults to 8080, `HTTP_SHUTDOWN_TIMEOUT` to 10s.
+Config comes from env (`internal/config`): `godotenv` loads `.envlocal`, falling back to `.env` (both gitignored; see `.env.example`). `DB_URL` is required. `PORT` defaults to 8080, `HTTP_SHUTDOWN_TIMEOUT` to 10s, `APP_TZ` to `Europe/Moscow` (all "today"/overdue/day boundaries on the server are computed in it; `Local` is rejected because the zone name is passed to Postgres).
 
-### Frontend (`frontend/`, React 19 + Vite)
+### Frontend (`frontend/`, React 19 + Vite + react-router-dom 7 + framer-motion)
 
 ```bash
 npm run dev      # dev server
@@ -24,50 +23,47 @@ npm run build    # -> frontend/dist
 npm run lint
 ```
 
-`VITE_API_URL` in `frontend/.env` points at the backend (currently the VPS, not localhost — change it to `http://localhost:8080` when developing against a local API).
+`VITE_API_URL` in `frontend/.env` points at the backend — set `http://localhost:8080` when developing against a local API. Empty = relative requests (same-origin nginx proxy).
 
 ## Architecture
 
-Layered Go backend + a single-page React frontend that talks to it over REST.
+`REDESIGN.md` is the spec for the current design (lists + dates + subtasks, "Today" as the home screen); its section 9 "Журнал" records what each stage did and the open debts. `README.md` documents the API.
 
 ```
-transport (HTTP)  ->  service (business logic)  ->  storage.RepoStorage  ->  model
+transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage (TaskRepo, ProjectRepo)  ->  model
 ```
 
-**Two binaries share the service layer but not the storage.** `cmd/todo-api` wires `PostgresRepo`; `cmd/todo-cli` wires `FileRepo` over `data/tasks.json`. Tests wire `FakeRepo` (in-memory). All three implement `storage.RepoStorage` (`internal/storage/file_repo.go`), so **adding a repo method means implementing it in all three** — `PostgresRepo.go`, `file_repo.go`, `fake_storage.go`.
-
-**Routing is hand-rolled.** `main.go` points `/todos`, `/todos/`, and `/todos/clear` at one handler, `Handler.Todos`, which dispatches on `r.Method` plus path prefix/suffix checks (`/done`, `/undone`, `/clear`, numeric id). There is no router library and no path-param parsing helper — ids are pulled with `strings.TrimPrefix` + `strconv.Atoi` in each handler.
-
-**Filtering, sorting, and pagination are in-memory, not SQL.** `GetTodos` calls `svc.List()` (full table), then pipes the slice through `FilterByDate` → `FilterByDone` → `SortTasks` → `Paginate`. `total` is counted before pagination. Query parsing lives in `internal/transport/query_helpers.go`; each parser returns an `ok` flag meaning "the param was present", and the stage is skipped when false (pagination needs *both* `limit` and `offset` to engage).
-
-**Errors.** `internal/model/errors.go` holds sentinel errors; `transport.WriteError` maps them to an HTTP status plus a JSON `{code, message}` body, defaulting to a logged 500. Note handlers are inconsistent: many parse/encode paths still use plain-text `http.Error` instead of `WriteError`.
-
-**The `daily` field spans four names**: DB column `daily` (DATE), Go field `Task.DailyDate` (`*time.Time`), JSON `daily_date`, and the PATCH request field `daily` (`*bool` — `true` sets today, `false` clears). `PostgresRepo.Patch` sets it with `(now() AT TIME ZONE 'Europe/Moscow')::date`.
-
-**Postgres schema is not migrated from files.** `NewPostgresRepo` runs idempotent `ALTER TABLE tasks ADD COLUMN IF NOT EXISTS` for `priority` and `daily` at startup; the `tasks` table itself must already exist. New columns should follow that pattern or be created out of band.
+- **Routing** is `http.ServeMux` with Go 1.22+ patterns in `internal/transport/router.go` (`GET /tasks/{id}` etc.). Prefixes: `/tasks`, `/projects`, `/day`, `/stats`, plus `/healthz`.
+- **Storage**: `storage/repo.go` defines `TaskRepo`/`ProjectRepo`, `TaskFilter` (AND-ed conditions), `TaskQuery`, `TaskPatch`. `PostgresRepo` builds SQL from the filter (`filterConds`/`orderBy` in `postgres_tasks.go`) using `pgx.NamedArgs` — **filtering, sorting and pagination happen in SQL**. `FakeRepo` mirrors the SQL semantics for service/handler tests; `repo_contract_test.go` runs the same scenario on both, so **a repo change must be made in `PostgresRepo` and `FakeRepo` together**.
+- **Views** (`today|week|overdue|inbox|project|all|archive`) and the `/day` blocks are assembled from filter conditions in the services. All list outputs return only root tasks (`parent_id IS NULL`) with `subtask_stats`; subtasks come only from `GET /tasks/{id}`.
+- **PATCH is tri-state**: `model.Opt[T]` distinguishes "key absent" from `null`, and `PostgresRepo` builds a dynamic `UPDATE` from present fields. Never use `COALESCE($1, col)` for patches.
+- **Dates**: `model.Date` is a calendar date serialized as `"YYYY-MM-DD"` (JSON and SQL). `due_date` = deadline, `scheduled_for` = the day you work on it (it replaced the old `daily` column).
+- **Order** lives in the DB (`position`), one column shared by all reorder scopes (`project`, `inbox`, `day`).
+- **Migrations**: goose, `migrations/NNNNN_name.sql`, embedded via the `migrations` package (`migrations/embed.go`) and applied by `storage.Migrate` at API start. Every migration must be reversible; data columns are renamed, never dropped. `NewPostgresRepo(db)` does not open connections or migrate.
+- **Errors**: sentinels in `internal/model/errors.go`; `transport.WriteError` maps them via the `errorCodes` table to status + `{code, message}`; unknown errors are logged and returned as 500.
 
 ### Frontend
 
-`App.tsx` is the only page; all data lives in `hooks/useTodos.ts`, which owns fetch state, optimistic mutations (update local state → PATCH → reload/rollback), and the manual drag order.
-
-- **Sections are derived client-side**, not stored: `lib/format.ts:sectionOf` puts a task in `daily` if `daily_date` is today, else its priority bucket (`high`/`medium`/`low`). `isDailyTask` compares the leading `YYYY-MM-DD` substring rather than parsing through `Date()` — that avoids a timezone shift dropping a day, so keep it string-based.
-- **Manual order is local-only**, persisted in `localStorage` under `todo-manual-order` as `Record<Section, number[]>`. The backend has no concept of ordering.
-- **Drag and drop** (`components/lists.tsx`) puts section headers and tasks in one `framer-motion` `Reorder.Group`, encoded as string keys `h:<section>` / `t:<id>`. Dragging is local-only until drop; `App.handleCommit` then splits the key list at the headers, rewrites the per-section orders, and issues a PATCH for every task that landed under a different header.
-- **The list view fetches `done=all` and filters client-side** when showing active tasks, because "done" rows still need to appear in the "выполнено сегодня" group. Only the completed-only filter is pushed to the server.
-- `hooks/useActivity.ts` separately fetches all completed tasks and buckets them by local day of `done_at` for the contribution grid.
-- `lib/format.ts` is the shared source of truth for sections, priority labels/weights, date keys, and Russian pluralization. UI strings are Russian.
+- `App.tsx` holds routes: `/today` (default), `/plan`, `/lists`, `/lists/:id` (number or `inbox|all|today|week|overdue`), `/archive`, and `/task/:id` — a sheet rendered over the screen stored in `location.state.background`.
+- `api/` — `client.ts` (`request`, `ApiError{status, code}`, `errorText` maps API codes to Russian UI text), `tasks.ts`, `projects.ts`, `day.ts`, `types.ts`.
+- `hooks/useTasks.ts` (`useTasks`, `useTask`, `useArchive`, counters), `useDay.ts`, `useProjects.ts`, `useActivity.ts`: optimistic mutations with rollback; `lib/sync.ts` is a "data changed" bus — after a mutation every other subscribed hook silently refetches.
+- `lib/date.ts` does all calendar math on local `YYYY-MM-DD` strings (never through UTC `Date` parsing), and every GET sends the client's `today=`. `lib/format.ts` holds priorities, sections, pluralization. `lib/quickAdd.ts` parses quick-add input (`#list`, `!срочно|!важно|!обычно`, `ДД.ММ`/`завтра`/`пн…вс` → due date).
+- `components/SwipeRow.tsx`: swipe left reveals "удалить", right = "на сегодня". The drag is started manually via `dragControls` because framer-motion refuses to start a drag on a child `<button>`; the reorder grip (`TaskRow.Grip`) uses a native `pointerdown` listener with `stopPropagation` so it never starts the swipe.
+- Skeletons (`Skeleton.tsx`), `ErrorState.tsx` for failed first loads, `error-bar` for failed actions, `ErrorBoundary.tsx` around the app.
+- Styles: `theme.css` = tokens (dark default, `[data-theme='light']` overrides), `index.css` = components. UI strings are Russian, labels lowercase.
 
 ## Gotchas
 
-- `frontend/` has **no `tsconfig.json` and no TypeScript installed** — Vite transpiles `.tsx` without type checking. `eslint.config.js` also only matches `**/*.{js,jsx}`, so `npm run lint` does not cover the app source. Type and lint errors will not surface from any command here; verify by reading.
-- `service.Update` and `service.Patch` call `ValidateTitle` but discard both return values, so titles are neither trimmed nor validated on update paths (only on `Add`).
-- `FileRepo` and `FakeRepo` return a zero `Task` (and often `nil` error) from several mutations rather than the updated row; `PostgresRepo` returns the real row. Don't rely on mutation return values being consistent across repos.
-- `old_cod/` is dead commented-out code kept for reference; ignore it.
-- `frontend/dist/` and `data/tasks.json` are committed build/state artifacts.
+- `frontend/` has **no `tsconfig.json` and no TypeScript installed** — Vite transpiles `.tsx` without type checking, and `eslint.config.js` only matches `**/*.{js,jsx}`, so `npm run lint` does not cover the app source. For a type check run a one-off `npx -p typescript@5 tsc --noEmit --strict --jsx react-jsx --module esnext --moduleResolution bundler --target es2022 --lib es2022,dom,dom.iterable --skipLibCheck src/main.tsx src/vite-env.d.ts`.
+- `db/init.sql` still creates the pre-redesign `tasks` table for empty volumes; migration `00002` starts with an idempotent base schema so goose also works on a completely empty DB.
+- Rolling back on prod: `goose down-to 0` first (with the new binary), then the old binary — the old one re-adds an empty `daily` column and breaks the Down migration.
+- `POST /tasks/clear` is a `TRUNCATE` of all tasks (active too) and deliberately has no UI.
+- `_legacy/` (old CLI, file storage, `old_cod/`, `data/tasks.json`) is ignored by the Go toolchain and does not compile; don't revive it.
+- `frontend/dist/` is a committed build artifact.
 
 ## Docker
 
-Full stack lives in `compose.yml`: `db` (postgres:17-alpine) → `backend` (multi-stage Go build → alpine) → `frontend` (Vite build → nginx:alpine serving `dist` and reverse-proxying `/todos` to `backend`).
+Full stack lives in `compose.yml`: `db` (postgres:17-alpine) → `backend` (multi-stage Go build → alpine) → `frontend` (Vite build → nginx:alpine serving `dist` and reverse-proxying `/tasks`, `/projects`, `/day`, `/stats` to `backend`).
 
 ```bash
 cp .env.example .env            # compose auto-loads ./.env for ${...} substitution
@@ -80,13 +76,13 @@ Defaults: frontend on `:8081`, API on `:8080`, Postgres bound to `127.0.0.1:5432
 
 Non-obvious pieces:
 
-- **`db/init.sql` holds the `CREATE TABLE tasks` DDL** that the Go code never had. It runs **only on first init of an empty `pgdata` volume** (`/docker-entrypoint-initdb.d`) — editing it does nothing to an existing volume. Schema changes on a live DB must be applied by hand, or follow the existing `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` pattern in `NewPostgresRepo`.
-- **`VITE_API_URL` is a build arg, not runtime config** — it is inlined into the JS bundle. Default is empty, which makes `api.ts` emit relative `/todos` requests that the frontend's own nginx proxies to `backend`. Same origin means the `corsMiddleware` in `main.go` stops mattering. Set it only to point the bundle at a different API host, and remember the image must be rebuilt to change it.
+- **`db/init.sql`** runs **only on first init of an empty `pgdata` volume** (`/docker-entrypoint-initdb.d`). Schema changes go into a new goose migration in `migrations/`, never into `init.sql`.
+- The backend image must `COPY migrations` — the Go code imports the `todo/migrations` package.
+- **`VITE_API_URL` is a build arg, not runtime config** — it is inlined into the JS bundle. Default is empty, which makes `api/client.ts` emit relative requests that the frontend's own nginx proxies to `backend`. Same origin means the `corsMiddleware` in `main.go` stops mattering. Set it only to point the bundle at a different API host, and remember the image must be rebuilt to change it.
 - **`frontend/.dockerignore` excludes `frontend/.env`** on purpose, so the VPS URL in it never leaks into the image and silently overrides the build arg.
 - **`nginx.conf` uses `resolver 127.0.0.11` + a variable in `proxy_pass`.** Without it nginx resolves `backend` once at startup and caches the IP forever — after `compose up -d --build` the recreated backend gets a new IP and the proxy 502s until nginx restarts.
 - **`GET /healthz`** in `main.go` exists solely for the container healthcheck. It is a liveness probe and deliberately does not touch the DB.
 - `stop_grace_period: 20s` on `backend` must stay above `HTTP_SHUTDOWN_TIMEOUT` (10s), or Docker SIGKILLs the process mid-graceful-shutdown.
-- The CLI (`cmd/todo-cli`, file storage) is not containerized; it still runs natively against `data/tasks.json`.
 
 For day-to-day work the native flow (`go run ./cmd/todo-api` + `npm run dev`) stays faster; compose is for prod-shaped runs and deploys.
 
