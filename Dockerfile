@@ -15,6 +15,9 @@ RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 COPY cmd ./cmd
 COPY internal ./internal
+# SQL-миграции вшиваются в бинарник через embed (пакет todo/migrations)
+# и применяются самим todo-api на старте — без этого каталога сборка падает.
+COPY migrations ./migrations
 
 # CGO_ENABLED=0 → статический бинарник без зависимостей от libc,
 # его можно положить в почти пустой образ.
