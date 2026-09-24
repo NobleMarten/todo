@@ -394,8 +394,11 @@ export function useWeekProgress(projectId: number | null, active: number) {
 const ARCHIVE_PAGE = 50
 const ARCHIVE_MAX = 200 // лимит бэкенда для view=archive
 
-/** Выполненные задачи (view=archive, свежие сверху) страницами по 50 и «показать ещё». */
-export function useArchive() {
+// Чьи выполненные: одного списка или входящих; без области — все («Итоги»).
+export type ArchiveScope = { view: 'project'; projectId: number } | { view: 'inbox' }
+
+/** Выполненные задачи (свежие сверху) страницами по 50 и «показать ещё». */
+export function useArchive(scope?: ArchiveScope) {
   const [items, setItems] = useState<Task[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -405,10 +408,17 @@ export function useArchive() {
   const itemsRef = useRef(items)
   itemsRef.current = items
 
+  const scopeKey = !scope ? 'all' : scope.view === 'project' ? `project:${scope.projectId}` : 'inbox'
   const fetchPage = useCallback(
-    (offset: number, limit: number) =>
-      listTasks({ view: 'archive', today: todayStr(), sort: 'done_at', order: 'desc', limit, offset }),
-    [],
+    (offset: number, limit: number) => {
+      const base = { today: todayStr(), sort: 'done_at', order: 'desc', limit, offset } as const
+      if (scopeKey === 'inbox') return listTasks({ ...base, view: 'inbox', done: true })
+      if (scopeKey.startsWith('project:')) {
+        return listTasks({ ...base, view: 'archive', project_id: Number(scopeKey.slice('project:'.length)) })
+      }
+      return listTasks({ ...base, view: 'archive' })
+    },
+    [scopeKey],
   )
 
   const load = useCallback(async () => {

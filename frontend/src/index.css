@@ -703,6 +703,8 @@ ul { list-style: none; }
 .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
 .quick-chip { min-height: 26px; gap: 6px; color: var(--text-dim); pointer-events: none; }
 .quick-chip svg { width: 11px; height: 11px; }
+.quick-suggest { min-height: 30px; color: var(--text-dim); }
+.quick-suggest .dot { width: 7px; height: 7px; }
 .quick-chip.prio-high { color: var(--danger); }
 .quick-chip.prio-medium { color: var(--warn); }
 .check-sm { width: 10px; height: 10px; border-width: 2px; }
@@ -1004,6 +1006,8 @@ ul { list-style: none; }
 
 .done-section { gap: 2px; }
 .done-section > .section-toggle { margin-bottom: 4px; }
+/* задачу только что выполнили — счётчик «выполнено» коротко подсвечивается */
+.section-toggle.bump { color: var(--ok); transition: color var(--transition); }
 .done-row { display: flex; align-items: center; min-height: 44px; padding-right: 12px; }
 .done-check {
   width: 19px;

@@ -23,10 +23,39 @@ const WEEKDAYS = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 
 const DATE_RE = /^(\d{1,2})\.(\d{1,2})(?:\.(\d{2}|\d{4}))?$/
 
-/** Имя списка для сравнения: без регистра; «#finance-tracker» и «#личное» совпадают как есть, пробелы в имени можно опустить. */
-function projectMatches(tag: string, p: Project): boolean {
-  const name = p.name.toLocaleLowerCase('ru')
-  return tag === name || tag === name.replace(/\s+/g, '')
+/** Имя для сравнения: без регистра, ё = е, без пробелов, дефисов и прочих знаков. */
+export function normalizeName(name: string): string {
+  return name.toLocaleLowerCase('ru').replace(/ё/g, 'е').replace(/[^\p{L}\p{N}]+/gu, '')
+}
+
+/**
+ * Список по тегу (без «#»): точное совпадение имени, иначе единственный список, чьё имя
+ * начинается с тега («#fin» → Finance-Tracker). Неоднозначный или пустой тег — null.
+ */
+export function findProject(tag: string, projects: Project[]): Project | null {
+  const t = normalizeName(tag)
+  if (!t) return null
+  const exact = projects.find((p) => normalizeName(p.name) === t)
+  if (exact) return exact
+  const byPrefix = projects.filter((p) => normalizeName(p.name).startsWith(t))
+  return byPrefix.length === 1 ? byPrefix[0] : null
+}
+
+/** Слово, которое сейчас набирается, если это #тег: для подсказок списков под полем. */
+export function typingTag(input: string): string | null {
+  const m = /(?:^|\s)#([^\s#]*)$/.exec(input)
+  return m ? m[1] : null
+}
+
+/** Подсказки к набираемому #тегу: списки, чьё имя начинается с него (или все, если набран один «#»). */
+export function suggestProjects(tag: string, projects: Project[]): Project[] {
+  const t = normalizeName(tag)
+  return projects.filter((p) => normalizeName(p.name).startsWith(t))
+}
+
+/** Тег для подстановки в поле: имя без пробелов, чтобы оно осталось одним словом. */
+export function tagOf(p: Project): string {
+  return `#${p.name.replace(/\s+/g, '')}`
 }
 
 /**
@@ -70,7 +99,7 @@ export function parseQuickAdd(input: string, projects: Project[], today: DateStr
     const lower = word.toLocaleLowerCase('ru')
 
     if (!out.project && lower.length > 1 && lower.startsWith('#')) {
-      const p = projects.find((p) => projectMatches(lower.slice(1), p))
+      const p = findProject(lower.slice(1), projects)
       if (p) {
         out.project = p
         continue

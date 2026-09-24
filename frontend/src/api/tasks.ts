@@ -5,6 +5,7 @@ export type ListParams = {
   view: View
   today: DateStr
   project_id?: number
+  done?: boolean // переопределяет условие вьюхи: inbox + done=true — выполненные входящие
   from?: DateStr
   to?: DateStr
   sort?: 'position' | 'due_date' | 'priority' | 'created_at' | 'done_at'

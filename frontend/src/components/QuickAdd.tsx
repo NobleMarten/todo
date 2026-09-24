@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { Project } from '../api/types'
 import { shortDate, todayStr } from '../lib/date'
 import { PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
-import { parseQuickAdd, type QuickParse } from '../lib/quickAdd'
+import { parseQuickAdd, suggestProjects, tagOf, typingTag, type QuickParse } from '../lib/quickAdd'
 import { CalendarIcon, PlusIcon, SpinIcon } from './icons'
 
 interface Props {
@@ -21,8 +21,17 @@ export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
   const parsed = parseQuickAdd(text, projects, todayStr())
   const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate)
+  // набирается #тег — под полем подсказки списков, по нажатию тег дописывается целиком
+  const tag = parsed.project ? null : typingTag(text)
+  const suggestions = tag === null ? [] : suggestProjects(tag, projects).slice(0, 6)
+
+  const pickProject = (p: Project) => {
+    setText((t) => t.replace(/#[^\s#]*$/, `${tagOf(p)} `))
+    inputRef.current?.focus()
+  }
 
   // подсказка «добавлено в …» живёт пару секунд
   useEffect(() => {
@@ -45,7 +54,25 @@ export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
 
   return (
     <form className="quick-add" onSubmit={submit}>
-      {(hasChips || hint) && (
+      {suggestions.length > 0 ? (
+        <div className="quick-chips" role="listbox" aria-label="списки">
+          {suggestions.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              role="option"
+              aria-selected="false"
+              className="chip chip-mono quick-suggest"
+              // не забираем фокус у поля — на iPhone иначе прячется клавиатура
+              onPointerDown={(e) => e.preventDefault()}
+              onClick={() => pickProject(p)}
+            >
+              <span className="dot" style={{ background: p.color }} />
+              {p.name}
+            </button>
+          ))}
+        </div>
+      ) : (hasChips || hint) && (
         <div className="quick-chips" aria-live="polite">
           {hasChips ? (
             <>
@@ -75,6 +102,7 @@ export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
       )}
       <div className="quick-add-row">
         <input
+          ref={inputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder={placeholder}

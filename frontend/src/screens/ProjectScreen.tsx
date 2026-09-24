@@ -6,6 +6,7 @@ import { QuickAdd } from '../components/QuickAdd'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { Sheet } from '../components/Sheet'
 import { TaskRun } from '../components/TaskRun'
+import { DoneSection } from '../components/DoneSection'
 import { ErrorState } from '../components/ErrorState'
 import { SkeletonRows } from '../components/Skeleton'
 import { MoreIcon, TrashIcon } from '../components/icons'
@@ -176,6 +177,10 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
           )
         })
       )}
+
+      {/* выполненные — только у «папок»: списка и входящих */}
+      {!error && spec.view === 'project' && <DoneSection scope={{ view: 'project', projectId: spec.projectId }} />}
+      {!error && spec.view === 'inbox' && <DoneSection scope={{ view: 'inbox' }} />}
 
       {canAdd && (
         <QuickAdd
