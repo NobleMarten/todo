@@ -1,0 +1,60 @@
+/* ── дизайн-токены: тёмная тема основная, светлая переопределяет те же имена ──── */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap');
+
+:root,
+[data-theme='dark'] {
+  --bg: #0B0B0F;
+  --surface: #15151A;
+  --surface-2: #0F0F13;
+  --border: rgba(255, 255, 255, .07);
+  --border-strong: rgba(255, 255, 255, .14);
+  --text: #EDEDF2;
+  --text-dim: #C9C9D8;
+  --muted: #9A9AB0;
+  --faint: #6E6E85;
+  --accent: #6AA6FF;
+  --danger: #FF8B7D;
+  --warn: #F5B851;
+  --ok: #4ADE80;
+
+  --accent-soft: rgba(106, 166, 255, .12);
+  --danger-soft: rgba(255, 139, 125, .10);
+  --warn-soft: rgba(245, 184, 81, .10);
+  --shadow: 0 -12px 40px rgba(0, 0, 0, .5);
+  --backdrop: rgba(0, 0, 0, .55);
+  --grain-opacity: .025;
+
+  --radius-row: 14px;
+  --radius-card: 16px;
+  --radius-ctl: 10px;
+
+  --sans: 'Geist', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, monospace;
+  --transition: 160ms ease;
+}
+
+[data-theme='light'] {
+  --bg: #F6F6F8;
+  --surface: #FFFFFF;
+  --surface-2: #EEEFF3;
+  --border: rgba(15, 18, 30, .08);
+  --border-strong: rgba(15, 18, 30, .16);
+  --text: #17171F;
+  --text-dim: #3A3A48;
+  --muted: #6B6B80;
+  --faint: #9A9AAE;
+  --accent: #2F6FE0;
+  --danger: #D9483B;
+  --warn: #C98A12;
+  --ok: #1E9E50;
+
+  --accent-soft: rgba(47, 111, 224, .10);
+  --danger-soft: rgba(217, 72, 59, .08);
+  --warn-soft: rgba(201, 138, 18, .10);
+  --shadow: 0 -12px 40px rgba(15, 18, 30, .12);
+  --backdrop: rgba(15, 18, 30, .28);
+  --grain-opacity: .018;
+}
+
+html { color-scheme: dark; }
+html[data-theme='light'] { color-scheme: light; }

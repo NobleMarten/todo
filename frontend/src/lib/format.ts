@@ -1,32 +1,9 @@
-import type { Task } from '../api'
-
-export function formatDate(iso?: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: 'short' })
-}
-
-export function isToday(iso?: string | null): boolean {
-  if (!iso) return false
-  const d = new Date(iso)
-  const now = new Date()
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  )
-}
+import type { DateStr, Priority, Task } from '../api/types'
+import { addDays, toDateStr } from './date'
 
 /** Local calendar date as YYYY-MM-DD for a given Date. */
 export function dateKey(d: Date): string {
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${d.getFullYear()}-${m}-${day}`
-}
-
-/** Local calendar date as YYYY-MM-DD. */
-export function todayKey(): string {
-  return dateKey(new Date())
+  return toDateStr(d)
 }
 
 /** Local calendar-day key for an ISO timestamp (used to bucket done_at by local day). */
@@ -36,71 +13,95 @@ export function localDayOf(iso?: string | null): string | null {
   return Number.isNaN(d.getTime()) ? null : dateKey(d)
 }
 
-/** Russian plural for "задача": 1 задача, 2 задачи, 5 задач. */
-export function pluralTasks(n: number): string {
+/** Русское склонение: plural(5, ['задача', 'задачи', 'задач']) → «задач». */
+export function plural(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10
   const mod100 = n % 100
-  if (mod10 === 1 && mod100 !== 11) return `${n} задача`
-  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return `${n} задачи`
-  return `${n} задач`
+  if (mod10 === 1 && mod100 !== 11) return forms[0]
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return forms[1]
+  return forms[2]
 }
 
-/**
- * A task is "на сегодня" when its daily_date is the current calendar day.
- * daily_date is a DATE the backend serializes at UTC midnight ("2026-07-13T00:00:00Z"),
- * so we compare the leading date portion directly instead of parsing through Date() —
- * that avoids the timezone shift that would drop a day for viewers behind UTC.
- */
-export function isDailyTask(task: Task): boolean {
-  const d = task.daily_date
-  if (!d) return false
-  return d.slice(0, 10) === todayKey()
+/** Russian plural for "задача": 1 задача, 2 задачи, 5 задач. */
+export function pluralTasks(n: number): string {
+  return `${n} ${plural(n, ['задача', 'задачи', 'задач'])}`
 }
 
-/** Priority-based sections, top to bottom. `daily` sits above the priority buckets. */
-export type Section = 'daily' | 'high' | 'medium' | 'low'
+// ── приоритет: только цвет чекбокса и порядок внутри секции ────────────────────
 
-export const SECTIONS: { key: Section; label: string }[] = [
-  { key: 'daily', label: 'на сегодня' },
-  { key: 'high', label: 'срочно' },
-  { key: 'medium', label: 'важно' },
-  { key: 'low', label: 'обычно' },
-]
+export const PRIORITIES: Priority[] = ['high', 'medium', 'low']
 
-/** Which section a task currently lives in: daily wins, otherwise its priority. */
-export function sectionOf(task: Task): Section {
-  if (isDailyTask(task)) return 'daily'
-  return (task.priority || 'low') as Section
-}
-
-export const PRIORITY_WEIGHT: Record<string, number> = { high: 1, medium: 2, low: 3 }
-
-export function priorityWeight(p?: string): number {
-  return PRIORITY_WEIGHT[p ?? 'low'] ?? 3
-}
-
-export const PRIORITY_LABEL: Record<string, string> = {
+export const PRIORITY_LABEL: Record<Priority, string> = {
   high: 'срочно',
   medium: 'важно',
   low: 'обычно',
 }
 
-export type Priority = 'high' | 'medium' | 'low'
+export const PRIORITY_WEIGHT: Record<Priority, number> = { high: 1, medium: 2, low: 3 }
 
-export function nextPriority(p?: string): Priority {
-  return p === 'high' ? 'medium' : p === 'medium' ? 'low' : 'high'
+// ── цвета списков ─────────────────────────────────────────────────────────────
+
+export const PROJECT_COLORS = ['#6AA6FF', '#F5B851', '#7DE0D1', '#4ADE80', '#C08BFF', '#6E6E85', '#FF8B7D']
+
+// ── секции экрана списка ──────────────────────────────────────────────────────
+
+export type Grouping = 'date' | 'priority'
+
+export type DateSection = 'overdue' | 'today' | 'week' | 'later' | 'none'
+export type SectionKey = DateSection | Priority
+
+export const DATE_SECTIONS: { key: DateSection; label: string }[] = [
+  { key: 'overdue', label: 'просрочено' },
+  { key: 'today', label: 'сегодня' },
+  { key: 'week', label: 'на этой неделе' },
+  { key: 'later', label: 'позже' },
+  { key: 'none', label: 'без даты' },
+]
+
+export const PRIORITY_SECTIONS: { key: Priority; label: string }[] = PRIORITIES.map((p) => ({
+  key: p,
+  label: PRIORITY_LABEL[p],
+}))
+
+/**
+ * Секция задачи при группировке по датам. Просроченный дедлайн важнее всего;
+ * иначе решает ближайшая из двух дат, а «делаю» в прошлом (вчера не доделал) считается сегодняшней.
+ */
+export function dateSectionOf(t: Task, today: DateStr): DateSection {
+  if (t.due_date && t.due_date < today) return 'overdue'
+  const scheduled = t.scheduled_for && t.scheduled_for < today ? today : t.scheduled_for
+  const dates = [scheduled, t.due_date].filter((d): d is DateStr => Boolean(d))
+  if (dates.length === 0) return 'none'
+  const nearest = dates.sort()[0]
+  if (nearest === today) return 'today'
+  if (nearest <= addDays(today, 7)) return 'week'
+  return 'later'
 }
 
-/** Sort a copy of tasks by the given field (client-side source of truth). */
-export function sortTasks(tasks: Task[], sort: '' | 'created_at' | 'priority'): Task[] {
-  if (!sort) return tasks
-  const copy = [...tasks]
-  if (sort === 'priority') {
-    copy.sort((a, b) => priorityWeight(a.priority) - priorityWeight(b.priority))
-  } else if (sort === 'created_at') {
-    copy.sort(
-      (a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime(),
-    )
+export function sectionOf(t: Task, grouping: Grouping, today: DateStr): SectionKey {
+  return grouping === 'date' ? dateSectionOf(t, today) : t.priority
+}
+
+export function sectionsFor(grouping: Grouping): { key: SectionKey; label: string }[] {
+  return grouping === 'date' ? DATE_SECTIONS : PRIORITY_SECTIONS
+}
+
+/**
+ * Раскладывает задачи (уже в порядке position) по секциям.
+ * Внутри секции по датам — сначала приоритет, затем ручной порядок; по приоритету — только ручной.
+ */
+export function groupTasks(tasks: Task[], grouping: Grouping, today: DateStr): Map<SectionKey, Task[]> {
+  const groups = new Map<SectionKey, Task[]>()
+  for (const s of sectionsFor(grouping)) groups.set(s.key, [])
+  for (const t of tasks) groups.get(sectionOf(t, grouping, today))!.push(t)
+  if (grouping === 'date') {
+    for (const [k, list] of groups) {
+      groups.set(k, [...list].sort((a, b) => PRIORITY_WEIGHT[a.priority] - PRIORITY_WEIGHT[b.priority]))
+    }
   }
-  return copy
+  return groups
 }
+
+// Лимиты бэкенда (service.maxTitleLen и имя списка) — чтобы не ловить 400 на вводе.
+export const TITLE_MAX = 120
+export const PROJECT_NAME_MAX = 60
