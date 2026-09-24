@@ -15,6 +15,7 @@ interface Props {
   project?: Project // показываем метку списка в смарт-видах
   dragControls?: DragControls // нет — строку не перетаскивают
   gripSpace?: boolean // место под ручку без неё: строки одного списка выровнены по правому краю
+  alert?: boolean // красная рамка и без дедлайна: блок «просрочено» на «Сегодня» (вчера не доделал)
   onToggle: () => void
   onSetDue: (d: DateStr | null) => void
 }
@@ -23,11 +24,12 @@ interface Props {
  * Строка задачи (макет B2): круглый чекбокс цвета приоритета, заголовок, справа бейджи —
  * прогресс подзадач (раскрывает их) и дата. Без дат — кнопка «назначить дедлайн».
  */
-export function TaskRow({ task, today, project, dragControls, gripSpace, onToggle, onSetDue }: Props) {
+export function TaskRow({ task, today, project, dragControls, gripSpace, alert, onToggle, onSetDue }: Props) {
   const [expanded, setExpanded] = useState(false)
   const openTask = useOpenTask()
   const stats = task.subtask_stats
   const overdue = task.due_date !== null && task.due_date < today
+  const red = (overdue || alert) && !task.done
 
   let dateBadge = null
   if (task.due_date) {
@@ -53,7 +55,7 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, onToggl
   }
 
   return (
-    <div className={`task ${task.done ? 'done' : ''} ${overdue && !task.done ? 'overdue' : ''}`}>
+    <div className={`task ${task.done ? 'done' : ''} ${red ? 'overdue' : ''}`}>
       <div className="task-row">
         <button
           className="check-hit"

@@ -67,3 +67,23 @@ export type ReorderScope =
   | { type: 'project'; project_id: number }
   | { type: 'inbox' }
   | { type: 'day'; date: DateStr }
+
+// GET /day: каждая задача попадает ровно в один из planned / overdue / carry_over.
+export type Day = {
+  date: DateStr
+  planned: Task[]
+  overdue: Task[]
+  carry_over: Task[]
+  done_today: Task[]
+  counts: { planned: number; done: number; overdue: number }
+}
+
+// GET /day/suggestions: уже запланированное на дату сюда не попадает.
+export type Suggestions = {
+  overdue: Task[]
+  due_soon: Task[]
+  stale: Task[]
+}
+
+// GET /stats/activity: только дни, где что-то выполнено.
+export type DayCount = { date: DateStr; done: number }

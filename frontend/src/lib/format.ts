@@ -6,13 +6,6 @@ export function dateKey(d: Date): string {
   return toDateStr(d)
 }
 
-/** Local calendar-day key for an ISO timestamp (used to bucket done_at by local day). */
-export function localDayOf(iso?: string | null): string | null {
-  if (!iso) return null
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? null : dateKey(d)
-}
-
 /** Русское склонение: plural(5, ['задача', 'задачи', 'задач']) → «задач». */
 export function plural(n: number, forms: [string, string, string]): string {
   const mod10 = n % 10

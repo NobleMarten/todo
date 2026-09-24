@@ -1,12 +1,11 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
-import { Reorder, useDragControls } from 'framer-motion'
-import type { DateStr, Project, Task } from '../api/types'
+import type { Project, Task } from '../api/types'
 import { ColorSwatches } from '../components/ProjectPicker'
 import { QuickAdd } from '../components/QuickAdd'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { Sheet } from '../components/Sheet'
-import { TaskRow } from '../components/TaskRow'
+import { TaskRun } from '../components/TaskRun'
 import { MoreIcon, SpinIcon, TrashIcon } from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
 import { reorderScopeOf, useTasks, useWeekProgress, type ListSpec } from '../hooks/useTasks'
@@ -214,86 +213,6 @@ function runsOf(list: Task[], grouping: Grouping): Task[][] {
     else runs.push([t])
   }
   return runs
-}
-
-interface RunProps {
-  run: Task[]
-  today: DateStr
-  draggable: boolean
-  projectById?: Map<number, Project>
-  onToggle: (t: Task) => void
-  onSetDue: (t: Task, d: DateStr | null) => void
-  onReorder: (ids: number[]) => void
-}
-
-function TaskRun({ run, today, draggable, projectById, onToggle, onSetDue, onReorder }: RunProps) {
-  const [order, setOrder] = useState<number[] | null>(null) // порядок во время перетаскивания
-  const orderRef = useRef<number[] | null>(null)
-  const byId = new Map(run.map((t) => [t.id, t]))
-  const ids = (order ?? run.map((t) => t.id)).filter((id) => byId.has(id))
-
-  const rowOf = (t: Task) => ({
-    task: t,
-    today,
-    project: t.project_id !== null ? projectById?.get(t.project_id) : undefined,
-    onToggle: () => onToggle(t),
-    onSetDue: (d: DateStr | null) => onSetDue(t, d),
-  })
-
-  if (!draggable || run.length < 2) {
-    return (
-      <ul className="task-list">
-        {run.map((t) => (
-          <li key={t.id}>
-            <TaskRow {...rowOf(t)} gripSpace={draggable} />
-          </li>
-        ))}
-      </ul>
-    )
-  }
-
-  return (
-    <Reorder.Group
-      as="ul"
-      axis="y"
-      values={ids}
-      onReorder={(next: number[]) => {
-        orderRef.current = next
-        setOrder(next)
-      }}
-      className="task-list"
-    >
-      {ids.map((id) => (
-        <DraggableTask
-          key={id}
-          id={id}
-          row={rowOf(byId.get(id)!)}
-          onDrop={() => {
-            if (orderRef.current) onReorder(orderRef.current)
-            orderRef.current = null
-            setOrder(null)
-          }}
-        />
-      ))}
-    </Reorder.Group>
-  )
-}
-
-function DraggableTask({
-  id,
-  row,
-  onDrop,
-}: {
-  id: number
-  row: Omit<Parameters<typeof TaskRow>[0], 'dragControls'>
-  onDrop: () => void
-}) {
-  const controls = useDragControls()
-  return (
-    <Reorder.Item value={id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className="reorder-item">
-      <TaskRow {...row} dragControls={controls} />
-    </Reorder.Item>
-  )
 }
 
 interface MenuProps {

@@ -54,3 +54,16 @@ export function relativeLabel(s: DateStr, today: DateStr): string {
   if (diff > 1) return `через ${diff} дн`
   return `просрочен на ${-diff} дн`
 }
+
+/** Дата в шапке «Сегодня»: «ср · 24 сентября». */
+export function dayHeading(s: DateStr): string {
+  const d = fromDateStr(s)
+  return `${WEEKDAYS_SHORT[d.getDay()]} · ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
+}
+
+/** Время выполнения по локальным часам: «14:05». */
+export function timeOf(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+}

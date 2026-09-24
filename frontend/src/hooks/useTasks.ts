@@ -390,3 +390,100 @@ export function useWeekProgress(projectId: number | null, active: number) {
 
   return doneWeek === null ? null : { done: doneWeek, total: doneWeek + active }
 }
+
+const ARCHIVE_PAGE = 50
+const ARCHIVE_MAX = 200 // лимит бэкенда для view=archive
+
+/** Выполненные задачи (view=archive, свежие сверху) страницами по 50 и «показать ещё». */
+export function useArchive() {
+  const [items, setItems] = useState<Task[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const itemsRef = useRef(items)
+  itemsRef.current = items
+
+  const fetchPage = useCallback(
+    (offset: number, limit: number) =>
+      listTasks({ view: 'archive', today: todayStr(), sort: 'done_at', order: 'desc', limit, offset }),
+    [],
+  )
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const r = await fetchPage(0, ARCHIVE_PAGE)
+      setItems(r.items)
+      setTotal(r.total)
+    } catch (e) {
+      setError(errorText(e, 'не удалось загрузить выполненные'))
+    } finally {
+      setLoading(false)
+    }
+  }, [fetchPage])
+
+  // тихо перечитываем столько, сколько уже показано: «показать ещё» не сбрасывается
+  const refresh = useCallback(async () => {
+    const shown = Math.min(ARCHIVE_MAX, Math.max(ARCHIVE_PAGE, itemsRef.current.length))
+    try {
+      const r = await fetchPage(0, shown)
+      setItems(r.items)
+      setTotal(r.total)
+    } catch {
+      /* оставляем то, что уже на экране */
+    }
+  }, [fetchPage])
+
+  useEffect(() => {
+    load()
+  }, [load])
+  useEffect(() => subscribeChanges(refresh), [refresh])
+
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true)
+    try {
+      const r = await fetchPage(itemsRef.current.length, ARCHIVE_PAGE)
+      const seen = new Set(itemsRef.current.map((t) => t.id))
+      setItems((prev) => [...prev, ...r.items.filter((t) => !seen.has(t.id))])
+      setTotal(r.total)
+    } catch (e) {
+      setActionError(errorText(e))
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [fetchPage])
+
+  /** Вернуть задачу в активные: из архива она уходит сразу. */
+  const undo = useCallback(
+    async (id: number) => {
+      const snapshot = itemsRef.current
+      setItems((prev) => prev.filter((t) => t.id !== id))
+      setTotal((n) => n - 1)
+      try {
+        await patchTask(id, { done: false })
+        notifyChanged(refresh)
+      } catch (e) {
+        setItems(snapshot)
+        setTotal((n) => n + 1)
+        setActionError(errorText(e))
+      }
+    },
+    [refresh],
+  )
+
+  return {
+    items,
+    total,
+    loading,
+    loadingMore,
+    error,
+    actionError,
+    clearActionError: () => setActionError(null),
+    reload: load,
+    loadMore,
+    undo,
+  }
+}
