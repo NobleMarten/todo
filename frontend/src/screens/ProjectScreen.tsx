@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { Reorder, useDragControls } from 'framer-motion'
 import type { DateStr, Project, Task } from '../api/types'
@@ -71,54 +71,58 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
     return created !== null
   }
 
+  const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
+
   return (
-    <div className="screen screen-with-add">
+    <div className="screen" style={tint}>
       <ScreenHeader
         back="/lists"
         title={
           <span className="title-with-dot">
-            {project && <span className="dot dot-lg" style={{ background: project.color }} />}
+            {project && <span className="dot dot-title" />}
             {title}
           </span>
         }
         right={
           project && (
-            <button className="icon-btn" onClick={() => setMenuOpen(true)} aria-label="меню списка">
-              <MoreIcon />
+            <button className="box-btn" onClick={() => setMenuOpen(true)} aria-label="настройки списка">
+              <span className="box">
+                <MoreIcon />
+              </span>
             </button>
           )
         }
-      />
+      >
+        {progress && progress.total > 0 && (
+          <div className="week-progress">
+            <span className="progress-track">
+              <span className="progress-fill" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+            </span>
+            <span className="mono-num muted">
+              {progress.done} / {progress.total} за неделю
+            </span>
+          </div>
+        )}
 
-      {progress && progress.total > 0 && (
-        <div className="week-progress">
-          <span className="progress-track">
-            <span className="progress-fill" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-          </span>
-          <span className="mono-num muted">
-            {progress.done} / {progress.total} за неделю
-          </span>
+        <div className="chips" role="radiogroup" aria-label="группировка">
+          {(
+            [
+              ['date', 'по датам'],
+              ['priority', 'по приоритету'],
+            ] as const
+          ).map(([g, label]) => (
+            <button
+              key={g}
+              className={`chip chip-mono ${grouping === g ? 'active' : ''}`}
+              role="radio"
+              aria-checked={grouping === g}
+              onClick={() => setGrouping(g)}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-      )}
-
-      <div className="chips" role="radiogroup" aria-label="группировка">
-        {(
-          [
-            ['date', 'по датам'],
-            ['priority', 'по приоритету'],
-          ] as const
-        ).map(([g, label]) => (
-          <button
-            key={g}
-            className={`chip ${grouping === g ? 'active' : ''}`}
-            role="radio"
-            aria-checked={grouping === g}
-            onClick={() => setGrouping(g)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      </ScreenHeader>
 
       {error && (
         <button className="error-bar" onClick={() => reload()}>
@@ -143,9 +147,8 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
           if (list.length === 0) return null
           return (
             <section key={key} className="task-section">
-              <div className={`section-label ${key === 'overdue' ? 'danger' : ''}`}>
-                {label}
-                <span className="mono-num">{list.length}</span>
+              <div className={`section-label tone-${key}`}>
+                {label} · {list.length}
               </div>
               {runsOf(list, grouping).map((run) => (
                 <TaskRun
@@ -155,6 +158,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
                   draggable={draggable}
                   projectById={spec.view === 'project' ? undefined : projectById}
                   onToggle={(t) => update(t.id, { done: !t.done })}
+                  onSetDue={(t, d) => update(t.id, { due_date: d })}
                   onReorder={reorder}
                 />
               ))}
@@ -165,7 +169,10 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
 
       {canAdd && (
         <QuickAdd
-          placeholder={spec.view === 'today' ? 'задача на сегодня' : `новая задача${project ? ` в «${project.name}»` : ''}`}
+          placeholder={
+            spec.view === 'today' ? 'задача на сегодня…' : project ? `задача в ${project.name}…` : 'задача во входящие…'
+          }
+          label={project ? `новая задача в списке ${project.name}` : 'новая задача'}
           onAdd={addTask}
         />
       )}
@@ -215,10 +222,11 @@ interface RunProps {
   draggable: boolean
   projectById?: Map<number, Project>
   onToggle: (t: Task) => void
+  onSetDue: (t: Task, d: DateStr | null) => void
   onReorder: (ids: number[]) => void
 }
 
-function TaskRun({ run, today, draggable, projectById, onToggle, onReorder }: RunProps) {
+function TaskRun({ run, today, draggable, projectById, onToggle, onSetDue, onReorder }: RunProps) {
   const [order, setOrder] = useState<number[] | null>(null) // порядок во время перетаскивания
   const orderRef = useRef<number[] | null>(null)
   const byId = new Map(run.map((t) => [t.id, t]))
@@ -229,6 +237,7 @@ function TaskRun({ run, today, draggable, projectById, onToggle, onReorder }: Ru
     today,
     project: t.project_id !== null ? projectById?.get(t.project_id) : undefined,
     onToggle: () => onToggle(t),
+    onSetDue: (d: DateStr | null) => onSetDue(t, d),
   })
 
   if (!draggable || run.length < 2) {

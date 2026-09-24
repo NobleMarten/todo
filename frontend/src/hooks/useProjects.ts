@@ -5,7 +5,6 @@ import {
   deleteProject,
   listProjects,
   patchProject,
-  reorderProjects,
 } from '../api/projects'
 import type { Project, ProjectPatch } from '../api/types'
 import { todayStr } from '../lib/date'
@@ -91,20 +90,6 @@ export function useProjects() {
     [run],
   )
 
-  /** Новый порядок активных списков; архивные остаются в хвосте. */
-  const reorder = useCallback(
-    (ids: number[]) => {
-      const current = allRef.current.filter((p) => !p.archived).map((p) => p.id)
-      if (ids.every((id, i) => id === current[i])) return Promise.resolve(null)
-      const pos = new Map(ids.map((id, i) => [id, i]))
-      return run(
-        (prev) => prev.map((p) => ({ ...p, position: pos.get(p.id) ?? p.position })).sort(byPosition),
-        () => reorderProjects(ids).then(() => true),
-      )
-    },
-    [run],
-  )
-
   return {
     projects: all.filter((p) => !p.archived),
     archived: all.filter((p) => p.archived),
@@ -117,6 +102,5 @@ export function useProjects() {
     create,
     update,
     remove,
-    reorder,
   }
 }

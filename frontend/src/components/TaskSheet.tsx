@@ -1,14 +1,14 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type CSSProperties } from 'react'
 import { useLocation, useNavigate, type Location } from 'react-router-dom'
 import type { Priority, Task } from '../api/types'
 import { useProjects } from '../hooks/useProjects'
-import { useTask } from '../hooks/useTasks'
+import { statsOf, useTask } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
 import { PRIORITIES, PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
 import { DatePicker } from './DatePicker'
 import { ProjectPicker } from './ProjectPicker'
 import { Sheet } from './Sheet'
-import { SubtaskList } from './SubtaskRow'
+import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { BackIcon, CheckIcon, CloseIcon, SpinIcon, TrashIcon } from './icons'
 
 type SheetState = { background?: Location }
@@ -42,9 +42,13 @@ export function TaskSheet({ id, onClose }: Props) {
   return (
     <Sheet label="карточка задачи" onClose={onClose}>
       <div className="sheet-top">
-        <button className="icon-btn" onClick={onClose} aria-label="закрыть">
-          <CloseIcon />
+        <button className="box-btn" onClick={onClose} aria-label="закрыть карточку">
+          <span className="box">
+            <CloseIcon />
+          </span>
         </button>
+        <span className="sheet-caption">{task?.parent_id ? 'подзадача' : 'задача'} · #{id}</span>
+        <span className="box-btn" aria-hidden="true" />
       </div>
       {loading && !task ? (
         <div className="sheet-loading">
@@ -77,6 +81,7 @@ type Actions = Pick<ReturnType<typeof useTask>, 'update' | 'addSubtask' | 'updat
   remove: () => void
 }
 
+/** Карточка (макет C2): заголовок с чекбоксом, список и приоритет, две даты, подзадачи, заметка. */
 function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: Task } & Actions) {
   const openTask = useOpenTask()
   const { projects } = useProjects()
@@ -85,10 +90,25 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
   const today = todayStr()
   const isSubtask = task.parent_id !== null
   const project = projects.find((p) => p.id === task.project_id)
+  const subtasks = task.subtasks ?? []
+  const stats = statsOf(subtasks)
+  const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
 
   return (
-    <div className="card">
-      <TitleEditor title={task.title} done={task.done} onSave={(title) => update({ title })} />
+    <div className="card" style={tint}>
+      <div className="card-head">
+        <button
+          className="check-hit"
+          onClick={() => update({ done: !task.done })}
+          aria-label={task.done ? 'вернуть задачу' : 'выполнить задачу'}
+          aria-pressed={task.done}
+        >
+          <span className={`check check-lg prio-${task.priority} ${task.done ? 'checked' : ''}`}>
+            {task.done && <CheckIcon />}
+          </span>
+        </button>
+        <TitleEditor title={task.title} done={task.done} onSave={(title) => update({ title })} />
+      </div>
 
       <div className="card-chips">
         {isSubtask ? (
@@ -98,14 +118,11 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
           </button>
         ) : (
           <button
-            className={`chip ${pickingProject ? 'active' : ''}`}
+            className={`chip project-chip ${project ? 'tinted' : ''}`}
             onClick={() => setPickingProject((v) => !v)}
             aria-expanded={pickingProject}
           >
-            <span
-              className={`dot ${project ? '' : 'dot-hollow'}`}
-              style={project ? { background: project.color } : undefined}
-            />
+            <span className={`dot ${project ? '' : 'dot-hollow'}`} />
             {project?.name ?? 'входящие'}
           </button>
         )}
@@ -136,52 +153,75 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
         />
       )}
 
-      <DatePicker
-        label="дедлайн — когда нельзя позже"
-        value={task.due_date}
-        today={today}
-        danger={task.due_date !== null && task.due_date < today && !task.done}
-        onChange={(v) => update({ due_date: v })}
-      />
-      <DatePicker
-        label="делаю — когда сажусь за неё"
-        value={task.scheduled_for}
-        today={today}
-        onChange={(v) => update({ scheduled_for: v })}
-      />
+      <div className="date-fields">
+        <DatePicker
+          kind="due"
+          label="дедлайн — когда нельзя позже"
+          value={task.due_date}
+          today={today}
+          onChange={(v) => update({ due_date: v })}
+        />
+        <DatePicker
+          kind="scheduled"
+          label="делаю — когда сажусь за неё"
+          value={task.scheduled_for}
+          today={today}
+          onChange={(v) => update({ scheduled_for: v })}
+        />
+      </div>
 
       {!isSubtask && (
         <section className="card-section">
-          <div className="field-label">подзадачи</div>
+          <div className="card-section-head">
+            <span className="field-label">подзадачи</span>
+            {stats.total > 0 && (
+              <span className="mono-num muted">
+                {stats.done} / {stats.total}
+              </span>
+            )}
+          </div>
+          {stats.total > 0 && (
+            <span className="progress-track thin">
+              <span className="progress-fill" style={{ width: `${(stats.done / stats.total) * 100}%` }} />
+            </span>
+          )}
           <SubtaskList
-            subtasks={task.subtasks ?? []}
+            subtasks={subtasks}
             onToggle={(s) => updateSubtask(s.id, { done: !s.done })}
             onOpen={(s) => openTask(s.id)}
-            onAdd={addSubtask}
           />
+          <SubtaskAdder label="добавить подзадачу" variant="link" onAdd={addSubtask} />
         </section>
       )}
 
       <section className="card-section">
-        <div className="field-label">заметка</div>
+        <span className="field-label">заметка</span>
         <NoteEditor note={task.note} onSave={(note) => update({ note })} />
       </section>
 
       <div className="card-actions">
-        <button className={`btn ${task.done ? '' : 'btn-primary'}`} onClick={() => update({ done: !task.done })}>
-          <CheckIcon />
-          {task.done ? 'вернуть в работу' : 'выполнено'}
-        </button>
         {confirmDelete ? (
-          <button className="btn btn-danger" onClick={remove} onBlur={() => setConfirmDelete(false)} autoFocus>
-            <TrashIcon />
-            {task.subtasks?.length ? 'удалить с подзадачами?' : 'точно удалить?'}
-          </button>
+          <>
+            <button className="btn btn-big" onClick={() => setConfirmDelete(false)}>
+              отмена
+            </button>
+            <button className="btn btn-big btn-danger" onClick={remove}>
+              <TrashIcon />
+              {subtasks.length ? 'удалить с подзадачами' : 'удалить'}
+            </button>
+          </>
         ) : (
-          <button className="btn btn-ghost" onClick={() => setConfirmDelete(true)} aria-label="удалить задачу">
-            <TrashIcon />
-            удалить
-          </button>
+          <>
+            <button
+              className={`btn btn-big ${task.done ? '' : 'btn-primary'}`}
+              onClick={() => update({ done: !task.done })}
+            >
+              {task.done ? 'вернуть в работу' : 'выполнено'}
+            </button>
+            <button className="btn btn-big btn-square" onClick={() => setConfirmDelete(true)} aria-label="удалить задачу">
+              <TrashIcon />
+            </button>
+          </>
         )}
       </div>
     </div>

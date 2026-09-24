@@ -2,11 +2,12 @@ import { useState } from 'react'
 import type { DragControls } from 'framer-motion'
 import type { DateStr, Project, Task } from '../api/types'
 import { useTask } from '../hooks/useTasks'
-import { dateLabel } from '../lib/date'
+import { shortDate } from '../lib/date'
 import { PRIORITY_LABEL } from '../lib/format'
-import { SubtaskList } from './SubtaskRow'
+import { NativeDateInput } from './DatePicker'
+import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { useOpenTask } from './TaskSheet'
-import { CalendarIcon, CheckIcon, ChevronIcon, FlagIcon, GripIcon, SpinIcon } from './icons'
+import { CalendarIcon, CheckIcon, GripIcon, SpinIcon } from './icons'
 
 interface Props {
   task: Task
@@ -15,21 +16,49 @@ interface Props {
   dragControls?: DragControls // нет — строку не перетаскивают
   gripSpace?: boolean // место под ручку без неё: строки одного списка выровнены по правому краю
   onToggle: () => void
+  onSetDue: (d: DateStr | null) => void
 }
 
-export function TaskRow({ task, today, project, dragControls, gripSpace, onToggle }: Props) {
+/**
+ * Строка задачи (макет B2): круглый чекбокс цвета приоритета, заголовок, справа бейджи —
+ * прогресс подзадач (раскрывает их) и дата. Без дат — кнопка «назначить дедлайн».
+ */
+export function TaskRow({ task, today, project, dragControls, gripSpace, onToggle, onSetDue }: Props) {
   const [expanded, setExpanded] = useState(false)
   const openTask = useOpenTask()
   const stats = task.subtask_stats
   const overdue = task.due_date !== null && task.due_date < today
 
+  let dateBadge = null
+  if (task.due_date) {
+    dateBadge = (
+      <span className={`badge ${overdue ? 'badge-danger' : ''}`} title="дедлайн">
+        {shortDate(task.due_date)}
+      </span>
+    )
+  } else if (task.scheduled_for) {
+    dateBadge = (
+      <span className="badge" title="делаю">
+        <CalendarIcon />
+        {shortDate(task.scheduled_for)}
+      </span>
+    )
+  } else {
+    dateBadge = (
+      <label className="date-assign">
+        <CalendarIcon />
+        <NativeDateInput value={null} label={`назначить дедлайн: ${task.title}`} onChange={onSetDue} />
+      </label>
+    )
+  }
+
   return (
-    <div className={`task ${task.done ? 'done' : ''}`}>
+    <div className={`task ${task.done ? 'done' : ''} ${overdue && !task.done ? 'overdue' : ''}`}>
       <div className="task-row">
         <button
           className="check-hit"
           onClick={onToggle}
-          aria-label={task.done ? 'вернуть задачу' : 'выполнить задачу'}
+          aria-label={`${task.done ? 'вернуть' : 'выполнить'}: ${task.title}`}
           aria-pressed={task.done}
           title={PRIORITY_LABEL[task.priority]}
         >
@@ -39,45 +68,30 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, onToggl
         </button>
 
         <button className="task-main" onClick={() => openTask(task.id)}>
-          <span className="task-title">{task.title}</span>
-          <span className="task-meta">
-            {project && (
-              <span className="meta-project">
-                <span className="dot" style={{ background: project.color }} />
-                {project.name}
-              </span>
-            )}
-            {task.due_date && (
-              <span className={`meta-date ${overdue ? 'overdue' : ''}`} title="дедлайн">
-                <FlagIcon />
-                {dateLabel(task.due_date, today)}
-              </span>
-            )}
-            {task.scheduled_for && task.scheduled_for !== task.due_date && (
-              <span className="meta-date" title="делаю">
-                <CalendarIcon />
-                {dateLabel(task.scheduled_for, today)}
-              </span>
-            )}
-          </span>
-        </button>
-
-        <button
-          className={`expand-btn ${expanded ? 'open' : ''}`}
-          onClick={() => setExpanded((v) => !v)}
-          aria-expanded={expanded}
-          aria-label={expanded ? 'свернуть подзадачи' : 'показать подзадачи'}
-        >
-          {stats && stats.total > 0 && (
-            <span className="mono-num">
-              {stats.done}/{stats.total}
+          <span className={`task-title ${expanded ? 'strong' : ''}`}>{task.title}</span>
+          {project && (
+            <span className="task-meta">
+              <span className="dot" style={{ background: project.color }} />
+              {project.name}
             </span>
           )}
-          <ChevronIcon open={expanded} />
         </button>
 
-        {!dragControls && gripSpace && <span className="grip-space" aria-hidden="true" />}
-        {dragControls && (
+        <span className="task-badges">
+          {stats && stats.total > 0 && (
+            <button
+              className="badge badge-btn"
+              onClick={() => setExpanded((v) => !v)}
+              aria-expanded={expanded}
+              aria-label={`${expanded ? 'свернуть' : 'показать'} подзадачи: ${stats.done} из ${stats.total}`}
+            >
+              {stats.done}/{stats.total}
+            </button>
+          )}
+          {!expanded && dateBadge}
+        </span>
+
+        {dragControls ? (
           <span
             className="grip"
             onPointerDown={(e) => {
@@ -88,37 +102,42 @@ export function TaskRow({ task, today, project, dragControls, gripSpace, onToggl
           >
             <GripIcon />
           </span>
+        ) : (
+          gripSpace && <span className="grip-space" aria-hidden="true" />
         )}
       </div>
 
-      {expanded && <SubtaskPanel parentId={task.id} />}
+      {expanded && <SubtaskPanel parentId={task.id} dueDate={task.due_date} />}
     </div>
   )
 }
 
 /** Раскрытая строка: подзадачи грузятся по требованию из GET /tasks/{id}. */
-function SubtaskPanel({ parentId }: { parentId: number }) {
+function SubtaskPanel({ parentId, dueDate }: { parentId: number; dueDate: DateStr | null }) {
   const { task, loading, error, actionError, addSubtask, updateSubtask } = useTask(parentId)
   const openTask = useOpenTask()
 
   if (loading && !task) {
     return (
-      <div className="subtasks subtasks-loading">
+      <div className="task-subtasks subtasks-loading">
         <SpinIcon />
       </div>
     )
   }
-  if (error || !task) return <div className="subtasks inline-error">{error ?? 'задача не найдена'}</div>
+  if (error || !task) return <div className="task-subtasks inline-error">{error ?? 'задача не найдена'}</div>
 
   return (
-    <>
+    <div className="task-subtasks">
       <SubtaskList
         subtasks={task.subtasks ?? []}
         onToggle={(s) => updateSubtask(s.id, { done: !s.done })}
         onOpen={(s) => openTask(s.id)}
-        onAdd={addSubtask}
       />
+      <div className="task-subtasks-footer">
+        {dueDate && <span className="badge badge-warn">до {shortDate(dueDate)}</span>}
+        <SubtaskAdder label="подзадача" variant="chip" onAdd={addSubtask} />
+      </div>
       {actionError && <div className="inline-error">{actionError}</div>}
-    </>
+    </div>
   )
 }

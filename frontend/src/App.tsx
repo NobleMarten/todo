@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
-import { TabBar } from './components/TabBar'
+import { hidesTabBar, TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
 import { useTheme } from './hooks/useTheme'
 import { ListsScreen } from './screens/ListsScreen'
@@ -18,6 +18,7 @@ export default function App() {
 
   const background = (location.state as { background?: Location } | null)?.background
   const base = taskMatch ? (background ?? '/lists') : location
+  const basePath = typeof base === 'string' ? base : base.pathname
   const taskId = taskMatch && /^\d+$/.test(taskMatch.params.id ?? '') ? Number(taskMatch.params.id) : null
 
   const closeSheet = () => {
@@ -37,7 +38,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/today" replace />} />
         </Routes>
       </main>
-      <TabBar pathname={typeof base === 'string' ? base : base.pathname} />
+      {!hidesTabBar(basePath) && <TabBar pathname={basePath} />}
       {taskId !== null && <TaskSheet key={taskId} id={taskId} onClose={closeSheet} />}
     </div>
   )

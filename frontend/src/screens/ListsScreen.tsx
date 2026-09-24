@@ -1,74 +1,65 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useState, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { Reorder, useDragControls } from 'framer-motion'
 import type { Project } from '../api/types'
 import { ColorSwatches } from '../components/ProjectPicker'
 import { ProjectRow } from '../components/ProjectRow'
-import { ScreenHeader } from '../components/ScreenHeader'
-import { ChevronIcon, MoonIcon, PlusIcon, SpinIcon, SunIcon } from '../components/icons'
+import { Logo, ScreenHeader } from '../components/ScreenHeader'
+import { AlertIcon, ChevronIcon, LinesIcon, MoonIcon, PlusIcon, SpinIcon, SunIcon, TargetIcon, WeekIcon } from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
 import { useSmartCounts } from '../hooks/useTasks'
 import type { Theme } from '../hooks/useTheme'
-import { longDateLabel, todayStr } from '../lib/date'
-import { PROJECT_COLORS, PROJECT_NAME_MAX } from '../lib/format'
+import { plural, PROJECT_COLORS, PROJECT_NAME_MAX } from '../lib/format'
 
 interface Props {
   theme: Theme
   onToggleTheme: () => void
 }
 
+/** Экран «Списки» (макет B1): смарт-виды 2×2, «мои списки», «новый список». */
 export function ListsScreen({ theme, onToggleTheme }: Props) {
-  const { projects, archived, loading, error, actionError, clearActionError, reload, create, update, reorder } =
-    useProjects()
+  const { projects, archived, loading, error, actionError, clearActionError, reload, create, update } = useProjects()
   const counts = useSmartCounts()
-  const [order, setOrder] = useState<number[] | null>(null) // порядок во время перетаскивания
-  const orderRef = useRef<number[] | null>(null)
-  const drag = (next: number[]) => {
-    orderRef.current = next
-    setOrder(next)
-  }
-  const drop = () => {
-    if (orderRef.current) reorder(orderRef.current)
-    orderRef.current = null
-    setOrder(null)
-  }
   const [showArchived, setShowArchived] = useState(false)
 
-  const byId = new Map(projects.map((p) => [p.id, p]))
-  const ids = order ?? projects.map((p) => p.id)
-
-  const smart = [
-    { to: '/lists/today', label: 'сегодня', count: counts?.today, tone: 'accent' },
-    { to: '/lists/week', label: '7 дней', count: counts?.week, tone: 'warn' },
-    { to: '/lists/overdue', label: 'просрочено', count: counts?.overdue, tone: 'danger' },
-    { to: '/lists/all', label: 'все задачи', count: counts?.all, tone: 'muted' },
-  ].filter((s) => s.tone !== 'danger' || (s.count ?? 0) > 0)
+  const smart: { to: string; label: string; icon: ReactNode; count?: number; tone: string }[] = [
+    { to: '/lists/today', label: 'Сегодня', icon: <TargetIcon size={19} />, count: counts?.today, tone: 'accent' },
+    { to: '/lists/week', label: '7 дней', icon: <WeekIcon size={19} />, count: counts?.week, tone: 'plain' },
+    { to: '/lists/overdue', label: 'Просрочено', icon: <AlertIcon size={19} />, count: counts?.overdue, tone: 'danger' },
+    { to: '/lists/all', label: 'Все задачи', icon: <LinesIcon size={19} />, count: counts?.all, tone: 'plain' },
+  ]
+  // «Просрочено» скрываем при нуле (раздел 5)
+  const visible = smart.filter((s) => s.tone !== 'danger' || (s.count ?? 0) > 0)
 
   return (
     <div className="screen">
+      <div className="eyebrow">
+        <Logo />
+      </div>
       <ScreenHeader
-        subtitle={longDateLabel(todayStr())}
+        title="Списки"
+        aside={counts ? `${counts.all} ${plural(counts.all, ['активная', 'активных', 'активных'])}` : undefined}
         right={
           <button
-            className="icon-btn"
+            className="box-btn"
             onClick={onToggleTheme}
             aria-label={theme === 'dark' ? 'светлая тема' : 'тёмная тема'}
           >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
+            <span className="box">{theme === 'dark' ? <SunIcon /> : <MoonIcon />}</span>
           </button>
         }
       />
 
       <div className="smart-grid">
-        {smart.map((s) => (
+        {visible.map((s) => (
           <Link key={s.to} to={s.to} className={`smart-card tone-${s.tone}`}>
-            <span className="smart-count mono-num">{s.count ?? '·'}</span>
+            <span className="smart-top">
+              <span className="smart-icon">{s.icon}</span>
+              <span className="smart-count">{s.count ?? '·'}</span>
+            </span>
             <span className="smart-label">{s.label}</span>
           </Link>
         ))}
       </div>
-
-      <div className="section-label">списки</div>
 
       {error && (
         <button className="error-bar" onClick={() => reload()}>
@@ -81,29 +72,32 @@ export function ListsScreen({ theme, onToggleTheme }: Props) {
         </button>
       )}
 
-      <div className="rows">
-        <ProjectRow to="/lists/inbox" name="входящие" color={null} active={counts?.inbox} />
-
-        {loading && projects.length === 0 ? (
-          <div className="rows-loading">
-            <SpinIcon />
-          </div>
-        ) : (
-          <Reorder.Group as="div" axis="y" values={ids} onReorder={drag} className="reorder">
-            {ids.map((id) => {
-              const p = byId.get(id)
-              return p ? (
-                <DraggableProject key={id} project={p} onDrop={drop} />
-              ) : null
-            })}
-          </Reorder.Group>
-        )}
-
-        <NewProject onCreate={create} nextColor={PROJECT_COLORS[projects.length % PROJECT_COLORS.length]} />
-      </div>
+      <section className="lists-section">
+        <div className="section-label">мои списки</div>
+        <div className="rows">
+          <ProjectRow to="/lists/inbox" name="входящие" color={null} active={counts?.inbox} />
+          {loading && projects.length === 0 ? (
+            <div className="rows-loading">
+              <SpinIcon />
+            </div>
+          ) : (
+            projects.map((p) => (
+              <ProjectRow
+                key={p.id}
+                to={`/lists/${p.id}`}
+                name={p.name}
+                color={p.color}
+                active={p.counts?.active}
+                overdue={p.counts?.overdue}
+              />
+            ))
+          )}
+          <NewProject onCreate={create} nextColor={PROJECT_COLORS[projects.length % PROJECT_COLORS.length]} />
+        </div>
+      </section>
 
       {archived.length > 0 && (
-        <div className="archived">
+        <section className="lists-section">
           <button
             className="section-label section-toggle"
             onClick={() => setShowArchived((v) => !v)}
@@ -113,7 +107,7 @@ export function ListsScreen({ theme, onToggleTheme }: Props) {
             <ChevronIcon open={showArchived} />
           </button>
           {showArchived && (
-            <div className="rows">
+            <div className="rows archived">
               {archived.map((p) => (
                 <ProjectRow
                   key={p.id}
@@ -129,32 +123,9 @@ export function ListsScreen({ theme, onToggleTheme }: Props) {
               ))}
             </div>
           )}
-        </div>
+        </section>
       )}
     </div>
-  )
-}
-
-function DraggableProject({ project, onDrop }: { project: Project; onDrop: () => void }) {
-  const controls = useDragControls()
-  return (
-    <Reorder.Item
-      as="div"
-      value={project.id}
-      dragListener={false}
-      dragControls={controls}
-      onDragEnd={onDrop}
-      className="reorder-item"
-    >
-      <ProjectRow
-        to={`/lists/${project.id}`}
-        name={project.name}
-        color={project.color}
-        active={project.counts?.active}
-        overdue={project.counts?.overdue}
-        dragControls={controls}
-      />
-    </Reorder.Item>
   )
 }
 
@@ -197,6 +168,7 @@ function NewProject({
   return (
     <form className="new-project open" onSubmit={submit}>
       <input
+        className="text-input"
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="название списка"

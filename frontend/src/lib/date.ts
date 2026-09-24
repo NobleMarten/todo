@@ -33,24 +33,24 @@ export function daysBetween(a: DateStr, b: DateStr): number {
 
 const WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 
-/** Короткая подпись даты относительно сегодня: «сегодня», «завтра», «пт», «25 сен», «25 сен 2027». */
-export function dateLabel(s: DateStr, today: DateStr): string {
+/** Короткая дата для бейджей: «17.09». */
+export function shortDate(s: DateStr): string {
+  const [, m, d] = s.split('-')
+  return `${d}.${m}`
+}
+
+/** Дата для поля карточки: «4 октября, сб». */
+export function fieldDateLabel(s: DateStr): string {
+  const d = fromDateStr(s)
+  const day = d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  return `${day}, ${WEEKDAYS_SHORT[d.getDay()]}`
+}
+
+/** Сколько осталось до даты: «через 13 дн», «сегодня», «завтра», «просрочен на 2 дн». */
+export function relativeLabel(s: DateStr, today: DateStr): string {
   const diff = daysBetween(today, s)
   if (diff === 0) return 'сегодня'
   if (diff === 1) return 'завтра'
-  if (diff === -1) return 'вчера'
-  const d = fromDateStr(s)
-  if (diff > 1 && diff < 7) return WEEKDAYS_SHORT[d.getDay()]
-  const sameYear = d.getFullYear() === fromDateStr(today).getFullYear()
-  const label = d.toLocaleDateString('ru-RU', {
-    day: 'numeric',
-    month: 'short',
-    year: sameYear ? undefined : 'numeric',
-  })
-  return label.replace('.', '').replace(' г', '')
-}
-
-/** Длинная подпись для шапок: «четверг, 24 сентября». */
-export function longDateLabel(s: DateStr): string {
-  return fromDateStr(s).toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+  if (diff > 1) return `через ${diff} дн`
+  return `просрочен на ${-diff} дн`
 }
