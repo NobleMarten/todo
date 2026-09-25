@@ -400,11 +400,3 @@ func TestActivity(t *testing.T) {
 		t.Fatalf("from > to: %v", err)
 	}
 }
-
-func TestClear(t *testing.T) {
-	s, repo := newTaskService()
-	mustAdd(t, s, storage.NewTask{Title: "x"})
-	if err := s.Clear(context.Background()); err != nil || len(repo.Tasks) != 0 {
-		t.Fatalf("clear: %v, left %d", err, len(repo.Tasks))
-	}
-}

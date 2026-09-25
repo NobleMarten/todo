@@ -37,6 +37,8 @@ var errorCodes = []struct {
 	{model.ErrInvalidView, http.StatusBadRequest, "INVALID_VIEW"},
 	{model.ErrInvalidQuery, http.StatusBadRequest, "INVALID_QUERY"},
 	{model.ErrInvalidBody, http.StatusBadRequest, "INVALID_BODY"},
+	{model.ErrUnauthorized, http.StatusUnauthorized, "UNAUTHORIZED"},
+	{model.ErrWrongPassword, http.StatusUnauthorized, "WRONG_PASSWORD"},
 }
 
 // WriteError записывает ошибку в HTTP-ответ в формате JSON {code, message}.

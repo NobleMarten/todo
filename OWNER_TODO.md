@@ -93,3 +93,86 @@ git checkout main && docker compose up -d --build backend frontend   # стар�
 `_legacy/cmd/todo-cli/main.go` — старый CLI, он ссылается на `storage.NewFileRepo`, которого в `internal/storage`
 больше нет. Go-сборка каталоги с `_` игнорирует (`go build/vet/test ./...` зелёные), а IDE всё равно их подсвечивает.
 Лечится одной строкой `//go:build ignore` в начале файла — могу добавить.
+
+---
+
+# После Этапов 7–11 (вход, бэкапы, CI, «Неделя», повторы, поиск)
+
+Всё ниже — снова твоя зона. Порядок важен: **п. 6 и 7 делаются в один деплой**, иначе приложение
+либо останется открытым, либо не пустит тебя самого.
+
+## 6. `frontend/nginx.conf` — добавить `auth` в регулярку прокси
+
+Вход живёт на `/auth/*`. Без этого `POST /auth/login` уходит в SPA-фолбэк, и войти нельзя.
+
+```nginx
+location ~ ^/(tasks|projects|day|stats|auth)(/|$) {
+```
+
+(«Неделя» и поиск новых префиксов не добавили: они под `/day` и `/tasks`.)
+
+## 7. `compose.yml` + серверный `.env` — пароль
+
+В `services.backend.environment`:
+
+```yaml
+APP_PASSWORD: ${APP_PASSWORD:-}
+```
+
+На VPS в `/root/todo/.env` (он не в git):
+
+```bash
+echo "APP_PASSWORD=$(openssl rand -base64 18)" >> /root/todo/.env   # или свой пароль
+grep APP_PASSWORD /root/todo/.env                                    # запомнить / в менеджер паролей
+```
+
+Проверка после деплоя:
+
+```bash
+docker compose logs backend | grep -c "APP_PASSWORD is empty"      # 0 — вход включён
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/tasks   # 401
+curl -s http://127.0.0.1:8091/auth/status                             # {"authed":false,"enabled":true}
+```
+
+Сессия живёт год. Сменить пароль = разлогинить все устройства. **Без HTTPS пароль при входе идёт открытым
+текстом** — от случайных посетителей и ботов защищает, от перехвата в чужом Wi-Fi нет.
+
+## 8. Бэкапы по cron
+
+```bash
+cd /root/todo && scripts/backup.sh          # первый прогон руками: "backup ok: …/todo-….sql.gz"
+crontab -e
+# 0 4 * * * cd /root/todo && scripts/backup.sh >> /var/log/todo-backup.log 2>&1
+```
+
+Копии в `~/todo-backups`, хранятся 14 последних (`KEEP=`/`BACKUP_DIR=` меняют). Восстановление — в шапке скрипта.
+Лучше периодически утаскивать копию с VPS к себе: бэкап на том же диске не спасёт от смерти диска.
+
+```bash
+scp root@95.85.252.88:'~/todo-backups/todo-*.sql.gz' ~/Backups/todo/
+```
+
+## 9. CI
+
+`.github/workflows/ci.yml` запускается сам на каждый push в GitHub — делать ничего не надо.
+Результат — вкладка Actions. Если красное, сначала смотри шаг `gofmt` и `npm ci`.
+
+## 10. Мерж и деплой
+
+```bash
+# локально
+git checkout main && git merge --ff-only redesign/stage-1 && git push
+# на VPS: сначала копия базы (п. 8 или руками), потом
+cd /root/todo && git pull && docker compose up -d --build
+docker compose logs backend | grep goose     # новые миграции: 00007 (повторы) — см. журнал REDESIGN.md
+```
+
+## 11. iPhone — проверить руками
+
+- PWA установлена заново (иначе iOS держит старый `start_url`), вход по паролю один раз, после перезапуска
+  PWA сессия сохраняется.
+- Отступы под чёлкой и home-индикатором на всех экранах, включая «Неделю».
+- Свайп строки не мешает вертикальной прокрутке; перетаскивание задачи на день в полосе недели.
+- Тост «удалено · вернуть» не перекрывается home-индикатором.
+- Поле ввода не зумит страницу при фокусе.
+- Светлая тема: статус-бар читается.

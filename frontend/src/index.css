@@ -1254,3 +1254,21 @@ ul { list-style: none; }
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* ── вход ─────────────────────────────────────────────────────────────────── */
+.login-form { display: flex; flex-direction: column; gap: 12px; max-width: 360px; margin: 18vh auto 0; }
+.login-form .screen-title { margin-bottom: 8px; }
+.login-form input {
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  outline: none;
+  font-size: 16px; /* меньше 16px — iOS зумит страницу при фокусе */
+}
+.login-form input:focus { border-color: var(--accent); }
+.login-form input[aria-invalid='true'] { border-color: var(--danger); }
+.login-form input::placeholder { color: var(--faint); }
+.login-error { font-size: 13px; color: var(--danger); }
+.login-form .btn-big { flex: none; }
+.logout-btn { display: block; margin: 32px auto 0; }

@@ -296,11 +296,6 @@ func (pr *PostgresRepo) DoneActivity(ctx context.Context, days DateRange, loc *t
 	return out, rows.Err()
 }
 
-func (pr *PostgresRepo) ClearTasks(ctx context.Context) error {
-	_, err := pr.db.ExecContext(ctx, "TRUNCATE tasks RESTART IDENTITY")
-	return err
-}
-
 // filterConds переводит TaskFilter в условия WHERE над алиасом t и дописывает аргументы в args.
 // Имена аргументов с префиксом f_, чтобы не столкнуться с аргументами самого запроса.
 func filterConds(f TaskFilter, args pgx.NamedArgs) []string {

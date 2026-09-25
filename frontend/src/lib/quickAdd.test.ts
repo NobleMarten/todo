@@ -113,8 +113,11 @@ describe('parseDateWord', () => {
     expect(parseDateWord('01.01.2026', TODAY)).toBe('2026-01-01')
   })
 
-  it('29.02 без года — только если в этом году такая дата есть', () => {
+  it('29.02 без года — ближайший високосный год', () => {
+    expect(parseDateWord('29.02', TODAY)).toBe('2028-02-29')
+    expect(parseDateWord('29.02', '2027-09-25')).toBe('2028-02-29')
     expect(parseDateWord('29.02', '2028-01-10')).toBe('2028-02-29')
+    expect(parseDateWord('29.02', '2028-03-01')).toBe('2032-02-29')
     expect(parseDateWord('29.02.2028', TODAY)).toBe('2028-02-29')
   })
 

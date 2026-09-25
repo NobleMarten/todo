@@ -60,7 +60,7 @@ export function tagOf(p: Project): string {
 
 /**
  * «25.09» / «25.09.2027» / «завтра» / «пн» → дата. ДД.ММ без года — ближайшая такая дата:
- * если в этом году она уже прошла, берётся следующий год. День недели — ближайший после сегодня
+ * если в этом году она уже прошла (или её нет, как 29.02), берётся следующий подходящий год. День недели — ближайший после сегодня
  * («пн» в понедельник — следующий понедельник).
  */
 export function parseDateWord(word: string, today: DateStr): DateStr | null {
@@ -84,10 +84,13 @@ export function parseDateWord(word: string, today: DateStr): DateStr | null {
     const d = new Date(y, month - 1, day)
     return d.getFullYear() === y && d.getMonth() === month - 1 && d.getDate() === day ? toDateStr(d) : null
   }
-  const date = valid(year)
-  if (!date) return null
-  if (!m[3] && date < today) return valid(year + 1)
-  return date
+  if (m[3]) return valid(year)
+  // без года — ближайшая такая дата не раньше сегодня; 29.02 ищется до ближайшего високосного года
+  for (let y = year; y <= year + 4; y++) {
+    const date = valid(y)
+    if (date && date >= today) return date
+  }
+  return null
 }
 
 export function parseQuickAdd(input: string, projects: Project[], today: DateStr): QuickParse {

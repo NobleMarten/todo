@@ -241,13 +241,6 @@ func (fr *FakeRepo) DoneActivity(_ context.Context, days DateRange, loc *time.Lo
 	return out, nil
 }
 
-func (fr *FakeRepo) ClearTasks(context.Context) error {
-	fr.mu.Lock()
-	defer fr.mu.Unlock()
-	fr.Tasks = nil
-	return nil
-}
-
 func (fr *FakeRepo) ListProjects(_ context.Context, includeArchived bool, today model.Date) ([]model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()

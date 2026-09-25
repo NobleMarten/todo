@@ -16,7 +16,6 @@ type TaskService interface {
 	Delete(ctx context.Context, id int) error
 	Reorder(ctx context.Context, scope service.ReorderScope, ids []int) error
 	Activity(ctx context.Context, from, to *model.Date) ([]model.DayCount, error)
-	Clear(ctx context.Context) error
 }
 
 type ProjectService interface {
@@ -61,7 +60,6 @@ func NewRouter(h *Handler) *http.ServeMux {
 	mux.HandleFunc("PATCH /tasks/{id}", h.PatchTask)
 	mux.HandleFunc("DELETE /tasks/{id}", h.DeleteTask)
 	mux.HandleFunc("POST /tasks/reorder", h.ReorderTasks)
-	mux.HandleFunc("POST /tasks/clear", h.ClearTasks)
 
 	mux.HandleFunc("GET /day", h.GetDay)
 	mux.HandleFunc("GET /day/suggestions", h.GetSuggestions)

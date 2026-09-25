@@ -15,6 +15,8 @@ type Config struct {
 	DB   struct{ URL string }
 	HTTP struct{ ShutdownTimeout time.Duration }
 	Loc  *time.Location // APP_TZ: в этой таймзоне считаются «сегодня» и границы дней
+	// APP_PASSWORD: пароль входа в приложение. Пусто — вход выключен (локальная разработка).
+	Password string
 }
 
 func Load() (Config, error) {
@@ -49,6 +51,7 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("APP_TZ=%q: %w", tz, err)
 	}
 	cfg.Loc = loc
+	cfg.Password = os.Getenv("APP_PASSWORD")
 	return cfg, nil
 }
 

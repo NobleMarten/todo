@@ -109,7 +109,6 @@ type TaskRepo interface {
 	PlanDay(ctx context.Context, date model.Date, add, remove []int) error
 	// DoneActivity — число выполненных корневых задач по дням done_at в таймзоне loc, только дни с done > 0.
 	DoneActivity(ctx context.Context, days DateRange, loc *time.Location) ([]model.DayCount, error)
-	ClearTasks(ctx context.Context) error
 }
 
 type ProjectRepo interface {

@@ -24,4 +24,6 @@ var (
 	ErrInvalidPriority        = errors.New("invalid priority, want high|medium|low")
 	ErrEmptyName              = errors.New("empty name")
 	ErrInvalidColor           = errors.New("invalid color, want #RRGGBB")
+	ErrUnauthorized           = errors.New("login required")
+	ErrWrongPassword          = errors.New("wrong password")
 )

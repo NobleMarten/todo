@@ -32,10 +32,14 @@ cd frontend && npm install && npm run dev
 | `PORT`                  | `8080`           | порт API                                                          |
 | `HTTP_SHUTDOWN_TIMEOUT` | `10s`            | сколько ждать активные запросы при остановке                      |
 | `APP_TZ`                | `Europe/Moscow`  | таймзона приложения: в ней считаются «сегодня», просрочка, дни    |
+| `APP_PASSWORD`          | пусто            | пароль входа; пусто — вход выключен и API открыт (только для разработки) |
 | `VITE_API_URL`          | пусто            | адрес API для фронта (build arg); пусто — относительные запросы   |
 | `TEST_DB_URL`           | —                | база для тестов репозитория и миграций; без неё они пропускаются  |
 
-Проверки: `go build ./... && go vet ./... && go test ./...`, во `frontend/` — `npm run build && npm run lint`.
+Проверки: `go build ./... && go vet ./... && go test ./...`, во `frontend/` — `npm run build && npm run lint && npm test`.
+То же гоняет CI (`.github/workflows/ci.yml`) на каждый push, Go-тесты — с настоящим Postgres.
+
+Бэкап базы из compose: `scripts/backup.sh` (gzip, последние 14 копий; cron и восстановление — в шапке скрипта).
 
 ## Модель
 
@@ -64,6 +68,20 @@ cd frontend && npm install && npm run dev
 
 Все ответы — JSON. Ошибки — `{"code": "...", "message": "..."}` с HTTP-статусом (см. ниже).
 
+### Вход
+
+Если задан `APP_PASSWORD`, всё, кроме `/auth/*` и `/healthz`, без сессии отвечает `401 UNAUTHORIZED`.
+
+| запрос               | тело         | ответ                                                       |
+|----------------------|--------------|-------------------------------------------------------------|
+| `GET /auth/status`   | —            | `{enabled, authed}`                                          |
+| `POST /auth/login`   | `{password}` | `204` + HttpOnly-cookie `todo_session` на год; неверный — `401 WRONG_PASSWORD` (с паузой 1 с) |
+| `POST /auth/logout`  | —            | `204`, cookie стёрта                                         |
+
+Сессия без состояния: cookie = HMAC от пароля, смена `APP_PASSWORD` разлогинивает все устройства.
+Без HTTPS пароль и cookie идут по сети открытым текстом — это защита от случайных посетителей, не от перехвата.
+Cookie работает только при same-origin (фронт и API за одним nginx): с `VITE_API_URL` на другой хост вход не заработает.
+
 ### Списки
 
 | запрос                        | тело                                  | ответ                         |
@@ -86,7 +104,6 @@ cd frontend && npm install && npm run dev
 | `PATCH /tasks/{id}`     | любые из `title, done, priority, project_id, parent_id, due_date, scheduled_for, note` | `Task` |
 | `DELETE /tasks/{id}`    | —                                                                     | `204`, подзадачи — каскадом |
 | `POST /tasks/reorder`   | `{scope, ids}`                                                        | `204`                  |
-| `POST /tasks/clear`     | —                                                                     | `204`, **удаляет все задачи** |
 
 Вьюхи `GET /tasks` (фильтрация в SQL; везде только корневые задачи с `subtask_stats`):
 
@@ -143,6 +160,7 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
 | статус | коды                                                                                     |
 |--------|------------------------------------------------------------------------------------------|
 | 400    | `INVALID_ID`, `INVALID_DATE`, `INVALID_VIEW`, `INVALID_QUERY`, `INVALID_BODY`, `EMPTY_TITLE`, `TITLE_TOO_LONG`, `EMPTY_NAME`, `INVALID_COLOR`, `INVALID_PRIORITY`, `NOTHING_TO_UPDATE`, `NOT_DONE`, `SUBTASK_TOO_DEEP` |
+| 401    | `UNAUTHORIZED`, `WRONG_PASSWORD`                                                         |
 | 404    | `TASK_NOT_FOUND`, `PROJECT_NOT_FOUND`                                                    |
 | 409    | `ALREADY_DONE`, `ALREADY_UNDONE`                                                         |
 | 500    | `INTERNAL_SERVER_ERROR` (подробности только в логе сервера)                              |

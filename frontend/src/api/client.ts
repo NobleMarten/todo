@@ -13,6 +13,17 @@ export class ApiError extends Error {
   }
 }
 
+// Сессия кончилась (или вход включили): API ответил 401 UNAUTHORIZED — приложение показывает экран входа.
+type UnauthorizedListener = () => void
+const unauthorizedListeners = new Set<UnauthorizedListener>()
+
+export function onUnauthorized(fn: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(fn)
+  return () => {
+    unauthorizedListeners.delete(fn)
+  }
+}
+
 async function parseJsonSafe(res: Response): Promise<unknown> {
   const text = await res.text()
   if (!text) return null
@@ -52,7 +63,9 @@ export async function request<T>(
   const data = await parseJsonSafe(res)
   if (!res.ok) {
     const err = (data ?? {}) as { code?: string; message?: string }
-    throw new ApiError(res.status, err.code ?? `HTTP_${res.status}`, err.message || `HTTP ${res.status}`)
+    const apiErr = new ApiError(res.status, err.code ?? `HTTP_${res.status}`, err.message || `HTTP ${res.status}`)
+    if (apiErr.code === 'UNAUTHORIZED') unauthorizedListeners.forEach((fn) => fn())
+    throw apiErr
   }
   return data as T
 }
@@ -72,6 +85,8 @@ const MESSAGES: Record<string, string> = {
   ALREADY_DONE: 'задача уже выполнена',
   ALREADY_UNDONE: 'задача уже в работе',
   NOTHING_TO_UPDATE: 'нечего сохранять',
+  UNAUTHORIZED: 'нужно войти',
+  WRONG_PASSWORD: 'неверный пароль',
 }
 
 /** Текст ошибки для показа пользователю: по коду API, иначе по статусу, иначе fallback. */

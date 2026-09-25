@@ -34,8 +34,16 @@ type response struct {
 
 func do(t *testing.T, h http.Handler, method, path, body string) response {
 	t.Helper()
+	return serve(h, newReq(method, path, body))
+}
+
+func newReq(method, path, body string) *http.Request {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+func serve(h http.Handler, req *http.Request) response {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return response{rec}
@@ -241,7 +249,7 @@ func TestDeleteTask(t *testing.T) {
 	do(t, h, "DELETE", "/tasks/abc", "").expect(t, 400, "INVALID_ID")
 }
 
-func TestReorderAndClear(t *testing.T) {
+func TestReorder(t *testing.T) {
 	h, repo := newTestServer(t)
 	createTask(t, h, `{"title":"a"}`)
 	createTask(t, h, `{"title":"b"}`)
@@ -253,10 +261,8 @@ func TestReorderAndClear(t *testing.T) {
 	do(t, h, "POST", "/tasks/reorder", `{"scope":{"type":"week"},"ids":[1]}`).expect(t, 400, "INVALID_BODY")
 	do(t, h, "POST", "/tasks/reorder", `{"scope":{"type":"day","date":"x"},"ids":[1]}`).expect(t, 400, "INVALID_DATE")
 
-	do(t, h, "POST", "/tasks/clear", "").expect(t, 204, "")
-	if len(repo.Tasks) != 0 {
-		t.Fatal("clear не очистил задачи")
-	}
+	// эндпоинт снесён: он делал TRUNCATE всех задач, включая активные
+	do(t, h, "POST", "/tasks/clear", "").expect(t, 405, "")
 }
 
 func TestProjects(t *testing.T) {

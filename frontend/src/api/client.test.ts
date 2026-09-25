@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, errorText, request } from './client'
+import { getAuthStatus } from './auth'
+import { ApiError, errorText, onUnauthorized, request } from './client'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -79,5 +80,46 @@ describe('errorText', () => {
   it('не ApiError — fallback', () => {
     expect(errorText(new Error('x'))).toBe('что-то пошло не так')
     expect(errorText('строка', 'своё')).toBe('своё')
+  })
+})
+
+describe('onUnauthorized', () => {
+  it('401 UNAUTHORIZED зовёт подписчиков, другие ошибки — нет', async () => {
+    const seen = vi.fn()
+    const off = onUnauthorized(seen)
+
+    stubFetch(async () => Response.json({ code: 'UNAUTHORIZED', message: 'login required' }, { status: 401 }))
+    await expect(request('GET', '/tasks')).rejects.toMatchObject({ status: 401, code: 'UNAUTHORIZED' })
+    expect(seen).toHaveBeenCalledTimes(1)
+
+    // неверный пароль — тоже 401, но это не «сессия кончилась»
+    stubFetch(async () => Response.json({ code: 'WRONG_PASSWORD', message: 'wrong password' }, { status: 401 }))
+    await expect(request('POST', '/auth/login', { body: { password: 'x' } })).rejects.toMatchObject({ code: 'WRONG_PASSWORD' })
+    expect(seen).toHaveBeenCalledTimes(1)
+
+    off()
+    stubFetch(async () => Response.json({ code: 'UNAUTHORIZED', message: '' }, { status: 401 }))
+    await request('GET', '/tasks').catch(() => {})
+    expect(seen).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getAuthStatus', () => {
+  it('JSON от бэкенда — как есть', async () => {
+    stubFetch(async () => Response.json({ enabled: true, authed: false }))
+    await expect(getAuthStatus()).resolves.toEqual({ enabled: true, authed: false })
+  })
+
+  it('не JSON (nginx не проксирует /auth и отдаёт index.html) или ошибка — вход выключен', async () => {
+    stubFetch(async () => new Response('<!doctype html><html></html>', { status: 200 }))
+    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
+
+    stubFetch(async () => new Response('', { status: 404 }))
+    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
+
+    stubFetch(async () => {
+      throw new TypeError('Failed to fetch')
+    })
+    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
   })
 })

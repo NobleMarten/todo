@@ -10,8 +10,8 @@ import { useProjects } from '../hooks/useProjects'
 import { useArchive } from '../hooks/useTasks'
 import { addDays, dayHeading, timeOf, todayStr, toDateStr } from '../lib/date'
 
-/** Экран «Итоги»: грид активности и выполненные задачи по дням, свежие сверху. */
-export function ArchiveScreen() {
+/** Экран «Итоги»: грид активности и выполненные задачи по дням, свежие сверху. onLogout — если вход включён. */
+export function ArchiveScreen({ onLogout }: { onLogout?: () => void }) {
   const activity = useActivity()
   const archive = useArchive()
   const { all: projects } = useProjects()
@@ -76,6 +76,12 @@ export function ArchiveScreen() {
       {archive.items.length < archive.total && (
         <button className="btn btn-ghost archive-more" disabled={archive.loadingMore} onClick={archive.loadMore}>
           {archive.loadingMore ? <SpinIcon /> : `показать ещё · ${archive.total - archive.items.length}`}
+        </button>
+      )}
+
+      {onLogout && (
+        <button className="btn btn-ghost logout-btn" onClick={onLogout}>
+          выйти
         </button>
       )}
     </div>

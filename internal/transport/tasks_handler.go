@@ -223,12 +223,3 @@ func (h *Handler) ReorderTasks(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// ClearTasks — POST /tasks/clear: удаляет все задачи. Двойное подтверждение — на фронте.
-func (h *Handler) ClearTasks(w http.ResponseWriter, r *http.Request) {
-	if err := h.tasks.Clear(r.Context()); err != nil {
-		WriteError(w, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}

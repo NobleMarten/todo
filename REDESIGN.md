@@ -764,3 +764,40 @@ ProjectPicker), сегмент приоритета. Два отдельных �
   Локально образ не собирался; `.dockerignore` `tsconfig.json` не отрезает, devDependencies ставятся `npm ci`.
 - Из прежних: реальный iPhone в PWA; `/tasks/clear` без UI; 404/405 ServeMux — plain text; тело > 1 МБ → 400;
   `model.ErrNotAllowed` не используется; шина `lib/sync` перечитывает все хуки.
+
+### Этап 7 — вход, бэкапы, CI, долги · 2026-09-25 · ветка `redesign/stage-1`, коммит «этап 7: …»
+Объём (вне раздела 6, по решению владельца после Этапа 6): этапы 7–11 = вход по паролю, бэкапы, CI, баг 29.02,
+«вернуть» после удаления, день работы в быстром вводе, «Неделя», повторяющиеся задачи, поиск. HTTPS — нет.
+Раздел 7 спеки (без авторизации, «Неделя» позже, без повторов и поиска) владелец этим снял.
+Сделано:
+- Вход: `internal/auth` (`Guard`: пароль из `APP_PASSWORD`, сессия без состояния — cookie `todo_session` =
+  HMAC-SHA256(пароль, метка), HttpOnly, SameSite=Lax, год; Secure при HTTPS/`X-Forwarded-Proto`; неверный пароль —
+  пауза 1 с под мьютексом = не больше попытки в секунду на процесс). `transport/auth_handler.go`: `GET /auth/status`,
+  `POST /auth/login`, `POST /auth/logout`, `RequireAuth` (открыты `/auth/*`, `/healthz`, OPTIONS). Коды `UNAUTHORIZED`,
+  `WRONG_PASSWORD` (401). Пустой пароль — вход выключен + WARNING в логе.
+  Фронт: `api/auth.ts`, `hooks/useAuth.ts`, `screens/LoginScreen.tsx`; `client.onUnauthorized` — любой 401 UNAUTHORIZED
+  показывает экран входа; «выйти» внизу «Итогов» (только при включённом входе). Если `/auth/status` вернул не JSON
+  (nginx ещё не проксирует `/auth`) — считаем вход выключенным, сервер всё равно отвечает 401 → экран входа.
+- `POST /tasks/clear` удалён целиком (хендлер, сервис, `ClearTasks` в обоих репозиториях, README); тест — теперь 405.
+- `lib/quickAdd.parseDateWord`: `29.02` без года — ближайший високосный год (было `null`), тесты.
+- `npm audit fix` (без --force): 0 уязвимостей, рантайм-зависимости не сдвинулись. `frontend/go.mod` — пустой модуль,
+  чтобы `go ./...` не заходил в `node_modules` (после обновления `flatted` там появился Go-пакет).
+- CI `.github/workflows/ci.yml`: backend (Postgres 17 service → `TEST_DB_URL`, build, vet, gofmt, test) и frontend
+  (node 22: `npm ci`, lint, test, build).
+- `scripts/backup.sh`: `pg_dump --clean` из контейнера `db` → gzip, проверка маркера «dump complete», ротация `KEEP=14`;
+  cron и восстановление — в шапке. Проверено с подменённым `docker` на локальном Postgres: ротация, восстановление,
+  оборванный дамп не вытесняет хорошие.
+- `.env.example` (`APP_PASSWORD`), README (вход, ошибки 401, CI, бэкап), CLAUDE.md, `OWNER_TODO.md` п. 6–11.
+- Проверено: Go-приёмка + `TEST_DB_URL` на локальном Postgres (контракт и миграции реально прогнаны), `npm run lint`,
+  `npm test` (93), `npm run build`.
+
+Отклонения и решения за владельца:
+- Вход на уровне приложения, а не basic auth в nginx: iOS в режиме PWA плохо живёт с basic auth, и это зона Docker.
+- Сессия без хранилища: украденная cookie действует до смены пароля (год). Для одного пользователя — ок.
+- Вход только same-origin: с `VITE_API_URL` на другой хост cookie не уйдёт (CORS-мидлварь не трогал, раздел 7).
+- Эндпоинты «Недели» и поиска — под существующими префиксами, чтобы не трогать nginx ещё раз.
+
+Долги:
+- **Деплой требует п. 6–7 `OWNER_TODO.md` одновременно** (nginx `auth` + `APP_PASSWORD`), иначе либо открыто, либо не войти.
+- Без HTTPS пароль и cookie идут открытым текстом.
+- Реальный запуск Docker-стека не проверялся (демон Docker локально не запущен).

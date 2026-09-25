@@ -212,10 +212,6 @@ func (s *TaskService) Delete(ctx context.Context, id int) error {
 	return s.tasks.DeleteTask(ctx, id)
 }
 
-func (s *TaskService) Clear(ctx context.Context) error {
-	return s.tasks.ClearTasks(ctx)
-}
-
 // ListQuery — разобранные параметры GET /tasks. Пустые строки и nil — «не задано».
 type ListQuery struct {
 	View      string

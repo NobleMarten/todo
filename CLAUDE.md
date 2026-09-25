@@ -37,7 +37,7 @@ Tests are plain-function unit tests next to the code (`src/**/*.test.ts`, node e
 transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage (TaskRepo, ProjectRepo)  ->  model
 ```
 
-- **Routing** is `http.ServeMux` with Go 1.22+ patterns in `internal/transport/router.go` (`GET /tasks/{id}` etc.). Prefixes: `/tasks`, `/projects`, `/day`, `/stats`, plus `/healthz`.
+- **Routing** is `http.ServeMux` with Go 1.22+ patterns in `internal/transport/router.go` (`GET /tasks/{id}` etc.). Prefixes: `/tasks`, `/projects`, `/day`, `/stats`, `/auth`, plus `/healthz`. New endpoints go under an existing prefix when possible — every new prefix also needs a line in `frontend/nginx.conf` (owner's zone).
 - **Storage**: `storage/repo.go` defines `TaskRepo`/`ProjectRepo`, `TaskFilter` (AND-ed conditions), `TaskQuery`, `TaskPatch`. `PostgresRepo` builds SQL from the filter (`filterConds`/`orderBy` in `postgres_tasks.go`) using `pgx.NamedArgs` — **filtering, sorting and pagination happen in SQL**. `FakeRepo` mirrors the SQL semantics for service/handler tests; `repo_contract_test.go` runs the same scenario on both, so **a repo change must be made in `PostgresRepo` and `FakeRepo` together**.
 - **Views** (`today|week|overdue|inbox|project|all|archive`) and the `/day` blocks are assembled from filter conditions in the services. All list outputs return only root tasks (`parent_id IS NULL`) with `subtask_stats`; subtasks come only from `GET /tasks/{id}`.
 - **PATCH is tri-state**: `model.Opt[T]` distinguishes "key absent" from `null`, and `PostgresRepo` builds a dynamic `UPDATE` from present fields. Never use `COALESCE($1, col)` for patches.
@@ -62,9 +62,10 @@ transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage
 - ESLint runs the React Compiler rules from `eslint-plugin-react-hooks` 7. `react-hooks/set-state-in-effect` is off for `.ts/.tsx` (every data hook loads in an effect by design); "latest ref" values are written in `useLayoutEffect`, not during render; files in `components/` export only components (`useOpenTask` lives in `hooks/`, `hidesTabBar` in `lib/nav.ts`) for fast refresh.
 - `db/init.sql` still creates the pre-redesign `tasks` table for empty volumes; migration `00002` starts with an idempotent base schema so goose also works on a completely empty DB.
 - Rolling back on prod: `goose down-to 0` first (with the new binary), then the old binary — the old one re-adds an empty `daily` column and breaks the Down migration.
-- `POST /tasks/clear` is a `TRUNCATE` of all tasks (active too) and deliberately has no UI.
+- **Auth** (`internal/auth`, `transport/auth_handler.go`): one password from `APP_PASSWORD`; empty = auth off (dev). Stateless session cookie = HMAC(password); `RequireAuth` wraps the mux in `main.go` and leaves `/auth/*`, `/healthz`, `OPTIONS` open. Frontend: any `401 UNAUTHORIZED` fires `onUnauthorized` in `api/client.ts` → `useAuth` → `LoginScreen`. Cookies need same-origin, so auth + cross-origin `VITE_API_URL` don't mix; in dev leave `APP_PASSWORD` empty. nginx must proxy `/auth` too.
+- CI: `.github/workflows/ci.yml` (Go with a Postgres service → `TEST_DB_URL` tests run; frontend lint/test/build). DB backups: `scripts/backup.sh`.
 - `_legacy/` (old CLI, file storage, `old_cod/`, `data/tasks.json`) is ignored by the Go toolchain and does not compile; don't revive it.
-- `frontend/dist/` is a committed build artifact.
+- `frontend/dist/` is gitignored (built locally or inside the frontend image), never committed.
 
 ## Docker
 

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"todo/internal/auth"
 	"todo/internal/config"
 	"todo/internal/service"
 	"todo/internal/storage"
@@ -53,6 +54,12 @@ func main() {
 
 	mux := transport.NewRouter(h)
 
+	guard := auth.New(cfg.Password)
+	transport.RegisterAuth(mux, guard)
+	if !guard.Enabled() {
+		log.Println("WARNING: APP_PASSWORD is empty — API is open to anyone who can reach it")
+	}
+
 	// Liveness-проба для Docker healthcheck: намеренно не трогает БД.
 	// Отвечает «процесс жив и обслуживает HTTP»; недоступность Postgres —
 	// это не повод перезапускать контейнер, там своя healthcheck и depends_on.
@@ -64,8 +71,8 @@ func main() {
 	// Запускаем HTTP-сервер на порту 8080.
 
 	srv := &http.Server{ // Создаем новый HTTP-сервер.
-		Addr:    ":" + cfg.Port,      // Указываем адрес и порт, на котором будет работать сервер (например, ":8080").
-		Handler: corsMiddleware(mux), // Устанавливаем обработчик для сервера, который будет обрабатывать входящие HTTP-запросы. В данном случае, мы оборачиваем наш mux в corsMiddleware, чтобы добавить поддержку CORS (Cross-Origin Resource Sharing).
+		Addr:    ":" + cfg.Port,                                    // Указываем адрес и порт, на котором будет работать сервер (например, ":8080").
+		Handler: corsMiddleware(transport.RequireAuth(guard, mux)), // Устанавливаем обработчик для сервера, который будет обрабатывать входящие HTTP-запросы. В данном случае, мы оборачиваем наш mux в corsMiddleware, чтобы добавить поддержку CORS (Cross-Origin Resource Sharing).
 	}
 
 	// log.Fatal(http.ListenAndServe(srv.Addr, srv.Handler))
