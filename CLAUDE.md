@@ -48,7 +48,7 @@ transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage
 
 ### Frontend
 
-- `App.tsx` holds routes: `/today` (default), `/plan`, `/lists`, `/lists/:id` (number or `inbox|all|today|week|overdue`), `/archive`, and `/task/:id` — a sheet rendered over the screen stored in `location.state.background`.
+- `App.tsx` holds routes: `/today` (default), `/plan`, `/week` (`?from=&day=`; tab «неделя»), `/lists`, `/lists/:id` (number or `inbox|all|today|week|overdue`), `/archive`, and `/task/:id` — a sheet rendered over the screen stored in `location.state.background`.
 - `api/` — `client.ts` (`request`, `ApiError{status, code}`, `errorText` maps API codes to Russian UI text), `tasks.ts`, `projects.ts`, `day.ts`, `types.ts`.
 - `hooks/useTasks.ts` (`useTasks`, `useTask`, `useArchive`, counters), `useDay.ts`, `useProjects.ts`, `useActivity.ts`: optimistic mutations with rollback; `lib/sync.ts` is a "data changed" bus — after a mutation every other subscribed hook silently refetches.
 - `lib/date.ts` does all calendar math on local `YYYY-MM-DD` strings (never through UTC `Date` parsing), and every GET sends the client's `today=`. `lib/format.ts` holds priorities, sections, pluralization. `lib/quickAdd.ts` parses quick-add input (`#list`, `!срочно|!важно|!обычно`, `ДД.ММ`/`завтра`/`пн…вс` → due date, the same with `@` or `@сегодня` → `scheduled_for`).

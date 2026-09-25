@@ -12,6 +12,7 @@ import { LoginScreen } from './screens/LoginScreen'
 import { PlanDayScreen } from './screens/PlanDayScreen'
 import { ProjectScreen } from './screens/ProjectScreen'
 import { TodayScreen } from './screens/TodayScreen'
+import { WeekScreen } from './screens/WeekScreen'
 
 const THEME_BG: Record<Theme, string> = { dark: '#0B0B0F', light: '#F6F6F8' }
 
@@ -59,6 +60,7 @@ export default function App() {
           <Route path="/" element={<Navigate to="/today" replace />} />
           <Route path="/today" element={<TodayScreen />} />
           <Route path="/plan" element={<PlanDayScreen />} />
+          <Route path="/week" element={<WeekScreen />} />
           <Route path="/lists" element={<ListsScreen theme={theme} onToggleTheme={toggle} />} />
           <Route path="/lists/:id" element={<ProjectScreen />} />
           <Route path="/archive" element={<ArchiveScreen onLogout={auth.enabled ? auth.logout : undefined} />} />

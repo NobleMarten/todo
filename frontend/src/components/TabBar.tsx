@@ -3,12 +3,12 @@ import { ChartIcon, LinesIcon, TargetIcon, WeekIcon } from './icons'
 
 const TABS = [
   { to: '/today', label: 'сегодня', icon: <TargetIcon size={20} />, match: (p: string) => p === '/today' },
-  { to: '/lists/week', label: 'неделя', icon: <WeekIcon size={20} />, match: (p: string) => p === '/lists/week' },
+  { to: '/week', label: 'неделя', icon: <WeekIcon size={20} />, match: (p: string) => p === '/week' },
   {
     to: '/lists',
     label: 'списки',
     icon: <LinesIcon size={20} />,
-    match: (p: string) => p.startsWith('/lists') && p !== '/lists/week',
+    match: (p: string) => p.startsWith('/lists'),
   },
   { to: '/archive', label: 'итоги', icon: <ChartIcon size={20} />, match: (p: string) => p === '/archive' },
 ]

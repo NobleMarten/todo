@@ -4,5 +4,5 @@
  */
 export function hidesTabBar(pathname: string): boolean {
   if (pathname === '/plan') return true
-  return /^\/lists\/[^/]+$/.test(pathname) && pathname !== '/lists/week'
+  return /^\/lists\/[^/]+$/.test(pathname)
 }

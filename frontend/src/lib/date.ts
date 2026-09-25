@@ -31,6 +31,41 @@ export function daysBetween(a: DateStr, b: DateStr): number {
   return Math.round((fromDateStr(b).getTime() - fromDateStr(a).getTime()) / 86_400_000)
 }
 
+/** Понедельник недели, в которую попадает дата. */
+export function mondayOf(s: DateStr): DateStr {
+  return addDays(s, -((fromDateStr(s).getDay() + 6) % 7))
+}
+
+const WEEKDAYS_FULL = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота']
+const MONTHS = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь']
+
+/** «Понедельник, 21 сентября» — заголовок дня на «Неделе». */
+export function longDayLabel(s: DateStr): string {
+  const d = fromDateStr(s)
+  const w = WEEKDAYS_FULL[d.getDay()]
+  return `${w[0].toUpperCase()}${w.slice(1)}, ${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}`
+}
+
+/** Месяц(ы) недели: «Сентябрь» или «Сентябрь – октябрь», с годом, если он не текущий. */
+export function weekTitle(from: DateStr, to: DateStr, today: DateStr): string {
+  const a = fromDateStr(from)
+  const b = fromDateStr(to)
+  const cap = (m: string) => `${m[0].toUpperCase()}${m.slice(1)}`
+  let title = a.getMonth() === b.getMonth() ? cap(MONTHS[a.getMonth()]) : `${cap(MONTHS[a.getMonth()])} – ${MONTHS[b.getMonth()]}`
+  if (b.getFullYear() !== fromDateStr(today).getFullYear()) title += ` ${b.getFullYear()}`
+  return title
+}
+
+/** Число дня месяца: «21». */
+export function dayOfMonth(s: DateStr): number {
+  return fromDateStr(s).getDate()
+}
+
+/** Короткий день недели: «пн». */
+export function weekdayShort(s: DateStr): string {
+  return WEEKDAYS_SHORT[fromDateStr(s).getDay()]
+}
+
 const WEEKDAYS_SHORT = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб']
 
 /** Короткая дата для бейджей: «17.09». */

@@ -9,6 +9,7 @@ interface Props {
   placeholder: string
   label: string
   projects: Project[] // куда можно попасть через #имя
+  inline?: boolean // в потоке экрана («Неделя»), а не пристыковано к низу
   /** null — не получилось (ошибку показывает экран); hint — куда ушла задача, если не в этот вид. */
   onAdd: (p: QuickParse) => Promise<{ hint?: string } | null>
 }
@@ -17,7 +18,7 @@ interface Props {
  * Поле быстрого добавления, пристыкованное к низу экрана списка (макет B2).
  * Разбор #списка, !приоритета, дедлайна и @дня работы — lib/quickAdd; распознанное показывается чипами до отправки.
  */
-export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
+export function QuickAdd({ placeholder, label, projects, inline, onAdd }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
@@ -54,7 +55,7 @@ export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
   }
 
   return (
-    <form className="quick-add" onSubmit={submit}>
+    <form className={`quick-add ${inline ? 'quick-add-inline' : ''}`} onSubmit={submit}>
       {suggestions.length > 0 ? (
         <div className="quick-chips" role="listbox" aria-label="списки">
           {suggestions.map((p) => (

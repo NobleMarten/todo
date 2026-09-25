@@ -87,3 +87,15 @@ export type Suggestions = {
 
 // GET /stats/activity: только дни, где что-то выполнено.
 export type DayCount = { date: DateStr; done: number }
+
+// GET /day/week — экран «Неделя».
+export type WeekDay = { date: DateStr; scheduled: Task[]; deadlines: Task[]; done: Task[] }
+
+export type Week = {
+  from: DateStr
+  to: DateStr
+  days: WeekDay[]
+  upcoming: Task[] // дедлайны после недели
+  backlog: Task[] // без дат
+  backlog_total: number
+}

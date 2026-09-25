@@ -26,6 +26,21 @@ func (h *Handler) GetDay(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, day)
 }
 
+// GetWeek — GET /day/week?from=: экран «Неделя», семь дней с from (без него — с понедельника текущей недели).
+func (h *Handler) GetWeek(w http.ResponseWriter, r *http.Request) {
+	from, err := queryDate(r.URL.Query(), "from")
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	week, err := h.day.Week(r.Context(), from)
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, week)
+}
+
 // GetSuggestions — GET /day/suggestions?date=: материал для «Собрать день».
 func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	date, err := queryDate(r.URL.Query(), "date")

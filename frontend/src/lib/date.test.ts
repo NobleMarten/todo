@@ -1,5 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, dayHeading, daysBetween, fieldDateLabel, fromDateStr, relativeLabel, shortDate, toDateStr } from './date'
+import {
+  addDays,
+  dayHeading,
+  dayOfMonth,
+  daysBetween,
+  fieldDateLabel,
+  fromDateStr,
+  longDayLabel,
+  mondayOf,
+  relativeLabel,
+  shortDate,
+  toDateStr,
+  weekdayShort,
+  weekTitle,
+} from './date'
 
 // TZ = Europe/Berlin (vitest.config.js): 29.03.2026 и 25.10.2026 — переходы на летнее/зимнее время.
 
@@ -69,5 +83,25 @@ describe('подписи', () => {
   it('день недели в подписях', () => {
     expect(fieldDateLabel('2026-10-04')).toBe('4 октября, вс')
     expect(dayHeading('2026-09-25')).toBe('пт · 25 сентября')
+  })
+})
+
+describe('неделя', () => {
+  it('mondayOf', () => {
+    expect(mondayOf('2026-09-21')).toBe('2026-09-21') // пн
+    expect(mondayOf('2026-09-25')).toBe('2026-09-21') // пт
+    expect(mondayOf('2026-09-27')).toBe('2026-09-21') // вс
+    expect(mondayOf('2026-10-01')).toBe('2026-09-28')
+    expect(mondayOf('2027-01-02')).toBe('2026-12-28')
+    expect(mondayOf('2026-03-29')).toBe('2026-03-23') // вс перехода на летнее время
+  })
+
+  it('подписи', () => {
+    expect(longDayLabel('2026-09-21')).toBe('Понедельник, 21 сентября')
+    expect(weekdayShort('2026-09-27')).toBe('вс')
+    expect(dayOfMonth('2026-09-07')).toBe(7)
+    expect(weekTitle('2026-09-21', '2026-09-27', '2026-09-25')).toBe('Сентябрь')
+    expect(weekTitle('2026-09-28', '2026-10-04', '2026-09-25')).toBe('Сентябрь – октябрь')
+    expect(weekTitle('2026-12-28', '2027-01-03', '2026-09-25')).toBe('Декабрь – январь 2027')
   })
 })

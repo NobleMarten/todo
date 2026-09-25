@@ -29,6 +29,7 @@ type ProjectService interface {
 type DayService interface {
 	Day(ctx context.Context, date *model.Date) (service.Day, error)
 	Suggestions(ctx context.Context, date *model.Date) (service.Suggestions, error)
+	Week(ctx context.Context, from *model.Date) (service.Week, error)
 	Plan(ctx context.Context, date model.Date, add, remove []int) error
 }
 
@@ -63,6 +64,7 @@ func NewRouter(h *Handler) *http.ServeMux {
 
 	mux.HandleFunc("GET /day", h.GetDay)
 	mux.HandleFunc("GET /day/suggestions", h.GetSuggestions)
+	mux.HandleFunc("GET /day/week", h.GetWeek)
 	mux.HandleFunc("POST /day/plan", h.PlanDay)
 
 	mux.HandleFunc("GET /stats/activity", h.Activity)

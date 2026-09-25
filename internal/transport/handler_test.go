@@ -387,3 +387,39 @@ func TestRouting(t *testing.T) {
 		t.Fatalf("GET /todos = %d", res.Code)
 	}
 }
+
+func TestWeekHandler(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"a","scheduled_for":"2026-09-22"}`)
+	createTask(t, h, `{"title":"b"}`)
+
+	var w struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+		Days []struct {
+			Date      string       `json:"date"`
+			Scheduled []model.Task `json:"scheduled"`
+			Deadlines []model.Task `json:"deadlines"`
+			Done      []model.Task `json:"done"`
+		} `json:"days"`
+		Upcoming     []model.Task `json:"upcoming"`
+		Backlog      []model.Task `json:"backlog"`
+		BacklogTotal int          `json:"backlog_total"`
+	}
+	res := do(t, h, "GET", "/day/week?from=2026-09-21", "")
+	res.expect(t, 200, "")
+	res.decode(t, &w)
+	if w.From != "2026-09-21" || w.To != "2026-09-27" || len(w.Days) != 7 {
+		t.Fatalf("week: %+v", w)
+	}
+	if len(w.Days[1].Scheduled) != 1 || w.Days[1].Scheduled[0].Title != "a" || w.BacklogTotal != 1 {
+		t.Fatalf("вт: %+v, backlog %d", w.Days[1], w.BacklogTotal)
+	}
+	// пустые списки — [] а не null: фронт не должен проверять на null
+	if !strings.Contains(res.Body.String(), `"upcoming":[]`) || !strings.Contains(res.Body.String(), `"deadlines":[]`) {
+		t.Fatalf("пустые списки: %s", res.Body.String())
+	}
+
+	do(t, h, "GET", "/day/week?from=21.09", "").expect(t, 400, "INVALID_DATE")
+	do(t, h, "GET", "/day/week", "").expect(t, 200, "")
+}
