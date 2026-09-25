@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 	"todo/internal/model"
@@ -369,10 +370,15 @@ func matches(t model.Task, f TaskFilter) bool {
 		f.NoDates && (t.DueDate != nil || t.ScheduledFor != nil),
 		f.CreatedBetween != nil && !inTimeRange(&t.CreatedAt, *f.CreatedBetween),
 		f.DoneBetween != nil && !inTimeRange(t.DoneAt, *f.DoneBetween),
-		f.UpdatedBefore != nil && !t.UpdatedAt.Before(*f.UpdatedBefore):
+		f.UpdatedBefore != nil && !t.UpdatedAt.Before(*f.UpdatedBefore),
+		f.Search != "" && !containsFold(t.Title, f.Search) && (t.Note == nil || !containsFold(*t.Note, f.Search)):
 		return false
 	}
 	return true
+}
+
+func containsFold(s, sub string) bool {
+	return strings.Contains(strings.ToLower(s), strings.ToLower(sub))
 }
 
 // compareTasks повторяет orderBy: пустые значения в конце при любом направлении,

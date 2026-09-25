@@ -5,7 +5,17 @@ import { ColorSwatches } from '../components/ProjectPicker'
 import { ProjectRow } from '../components/ProjectRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { SkeletonRows } from '../components/Skeleton'
-import { AlertIcon, ChevronIcon, LinesIcon, MoonIcon, PlusIcon, SunIcon, TargetIcon, WeekIcon } from '../components/icons'
+import {
+  AlertIcon,
+  ChevronIcon,
+  LinesIcon,
+  MoonIcon,
+  PlusIcon,
+  SearchIcon,
+  SunIcon,
+  TargetIcon,
+  WeekIcon,
+} from '../components/icons'
 import { useProjects } from '../hooks/useProjects'
 import { useSmartCounts } from '../hooks/useTasks'
 import type { Theme } from '../hooks/useTheme'
@@ -40,13 +50,20 @@ export function ListsScreen({ theme, onToggleTheme }: Props) {
         title="Списки"
         aside={counts ? `${counts.all} ${plural(counts.all, ['активная', 'активных', 'активных'])}` : undefined}
         right={
-          <button
-            className="box-btn"
-            onClick={onToggleTheme}
-            aria-label={theme === 'dark' ? 'светлая тема' : 'тёмная тема'}
-          >
-            <span className="box">{theme === 'dark' ? <SunIcon /> : <MoonIcon />}</span>
-          </button>
+          <>
+            <Link className="box-btn" to="/search" aria-label="поиск">
+              <span className="box">
+                <SearchIcon />
+              </span>
+            </Link>
+            <button
+              className="box-btn"
+              onClick={onToggleTheme}
+              aria-label={theme === 'dark' ? 'светлая тема' : 'тёмная тема'}
+            >
+              <span className="box">{theme === 'dark' ? <SunIcon /> : <MoonIcon />}</span>
+            </button>
+          </>
         }
       />
 

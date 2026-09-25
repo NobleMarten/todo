@@ -13,6 +13,7 @@ export type ListParams = {
   order?: 'asc' | 'desc'
   limit?: number
   offset?: number
+  q?: string // подстрока в заголовке или заметке
 }
 
 export async function listTasks(params: ListParams): Promise<ListResponse<Task>> {

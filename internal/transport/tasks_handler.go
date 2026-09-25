@@ -86,6 +86,7 @@ func parseListQuery(r *http.Request) (service.ListQuery, error) {
 	q := r.URL.Query()
 	lq := service.ListQuery{
 		View:  q.Get("view"),
+		Q:     q.Get("q"),
 		Sort:  q.Get("sort"),
 		Order: q.Get("order"),
 	}

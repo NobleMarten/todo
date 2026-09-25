@@ -1414,3 +1414,20 @@ ul { list-style: none; }
 .date-field.set-repeat .date-field-icon { color: var(--ok); }
 .repeat-days { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 2px; }
 .repeat-days .chip { min-width: 40px; justify-content: center; }
+
+/* ── поиск ────────────────────────────────────────────────────────────────── */
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--faint);
+}
+.search-field:focus-within { border-color: var(--accent); }
+.search-field input { flex: 1; min-width: 0; height: 100%; background: none; border: 0; outline: none; font-size: 16px; color: var(--text); }
+.search-field input::placeholder { color: var(--faint); }
+.search-field input::-webkit-search-cancel-button { filter: grayscale(1); }

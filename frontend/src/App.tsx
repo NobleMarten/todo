@@ -10,6 +10,7 @@ import { ArchiveScreen } from './screens/ArchiveScreen'
 import { ListsScreen } from './screens/ListsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { PlanDayScreen } from './screens/PlanDayScreen'
+import { SearchScreen } from './screens/SearchScreen'
 import { ProjectScreen } from './screens/ProjectScreen'
 import { TodayScreen } from './screens/TodayScreen'
 import { WeekScreen } from './screens/WeekScreen'
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/today" element={<TodayScreen />} />
           <Route path="/plan" element={<PlanDayScreen />} />
           <Route path="/week" element={<WeekScreen />} />
+          <Route path="/search" element={<SearchScreen />} />
           <Route path="/lists" element={<ListsScreen theme={theme} onToggleTheme={toggle} />} />
           <Route path="/lists/:id" element={<ProjectScreen />} />
           <Route path="/archive" element={<ArchiveScreen onLogout={auth.enabled ? auth.logout : undefined} />} />

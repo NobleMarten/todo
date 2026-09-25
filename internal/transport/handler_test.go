@@ -445,3 +445,20 @@ func TestRepeatHandler(t *testing.T) {
 		t.Fatalf("repeat null: %s", res.Body.String())
 	}
 }
+
+func TestSearchHandler(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"Докер для todo"}`)
+	createTask(t, h, `{"title":"курсовая"}`)
+
+	var res ListTasksResponse
+	do(t, h, "GET", "/tasks?view=all&q=%20%D0%B4%D0%BE%D0%BA%D0%B5%D1%80%20", "").decode(t, &res) // « докер »
+	if res.Total != 1 || res.Items[0].Title != "Докер для todo" {
+		t.Fatalf("q=докер: %+v", res)
+	}
+	do(t, h, "GET", "/tasks?view=all&q=", "").decode(t, &res)
+	if res.Total != 2 {
+		t.Fatalf("пустой q не фильтрует: %d", res.Total)
+	}
+	do(t, h, "GET", "/tasks?q="+strings.Repeat("a", 101), "").expect(t, 400, "INVALID_QUERY")
+}

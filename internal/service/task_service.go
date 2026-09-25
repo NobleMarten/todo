@@ -327,7 +327,10 @@ type ListQuery struct {
 	Limit     int
 	Offset    int
 	Today     *model.Date
+	Q         string // поиск по заголовку и заметке
 }
+
+const maxSearchLen = 100
 
 var sortFields = map[string]storage.SortField{
 	"position":   storage.SortPosition,
@@ -377,6 +380,13 @@ func (s *TaskService) List(ctx context.Context, q ListQuery) ([]model.Task, int,
 		return nil, 0, fmt.Errorf("%w: project_id=%d", model.ErrInvalidQuery, *q.ProjectID)
 	}
 	f.ProjectID = q.ProjectID
+
+	if search := strings.TrimSpace(q.Q); search != "" {
+		if len([]rune(search)) > maxSearchLen {
+			return nil, 0, fmt.Errorf("%w: q longer than %d", model.ErrInvalidQuery, maxSearchLen)
+		}
+		f.Search = search
+	}
 
 	if (q.From == nil) != (q.To == nil) {
 		return nil, 0, fmt.Errorf("%w: from and to go together", model.ErrInvalidQuery)

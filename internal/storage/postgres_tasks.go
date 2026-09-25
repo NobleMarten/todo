@@ -353,8 +353,14 @@ func filterConds(f TaskFilter, args pgx.NamedArgs) []string {
 	if f.UpdatedBefore != nil {
 		add("t.updated_at < @f_updated_before", "f_updated_before", *f.UpdatedBefore)
 	}
+	if f.Search != "" {
+		// ILIKE складывает регистр по lc_ctype базы; %, _ и \ из запроса — буквально
+		add(`(t.title ILIKE @f_search OR t.note ILIKE @f_search)`, "f_search", "%"+likeEscaper.Replace(f.Search)+"%")
+	}
 	return conds
 }
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 // orderBy — сортировка по белому списку полей. Пустые даты всегда в конце,
 // при равенстве — ручной порядок.

@@ -208,6 +208,46 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 	})
 
+	t.Run("search", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		a := mustCreate(t, r, NewTask{Title: "Докер для todo"})
+		b := mustCreate(t, r, NewTask{Title: "курсовая", Note: ptr("глава про ДОКЕР-сети")})
+		c := mustCreate(t, r, NewTask{Title: "скидка 50% на курс"})
+		d := mustCreate(t, r, NewTask{Title: "snake_case в go"})
+		mustCreate(t, r, NewTask{Title: "докер внутри подзадачи", ParentID: &b.ID})
+		done := mustCreate(t, r, NewTask{Title: "докер-компоуз"})
+		if _, err := r.PatchTask(ctx, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
+			t.Fatal(err)
+		}
+		notDone, yes := false, true
+
+		find := func(q string, doneFilter *bool) []int {
+			t.Helper()
+			items, total, err := r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{Search: q, Done: doneFilter}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if total != len(items) {
+				t.Fatalf("total %d != %d", total, len(items))
+			}
+			return ids(items)
+		}
+		check := func(name string, got, want []int) {
+			t.Helper()
+			if !slices.Equal(got, want) {
+				t.Fatalf("%s = %v, want %v", name, got, want)
+			}
+		}
+		// регистр кириллицы, заметка; подзадачи не ищутся (только корневые, как во всех выдачах)
+		check("докер активные", find("докер", &notDone), []int{a.ID, b.ID})
+		check("ДОКЕР выполненные", find("ДОКЕР", &yes), []int{done.ID})
+		check("% буквально", find("50%", nil), []int{c.ID})
+		check("% не шаблон", find("%", nil), []int{c.ID})
+		check("_ буквально", find("_", nil), []int{d.ID})
+		check("нет совпадений", find("kubernetes", nil), []int{})
+	})
+
 	t.Run("repeat and note on create", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()

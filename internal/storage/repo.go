@@ -33,6 +33,7 @@ type TaskFilter struct {
 	CreatedBetween  *TimeRange
 	DoneBetween     *TimeRange
 	UpdatedBefore   *time.Time
+	Search          string // подстрока в заголовке или заметке без учёта регистра
 }
 
 type SortField string

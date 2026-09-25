@@ -43,13 +43,14 @@ transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage
 - **PATCH is tri-state**: `model.Opt[T]` distinguishes "key absent" from `null`, and `PostgresRepo` builds a dynamic `UPDATE` from present fields. Never use `COALESCE($1, col)` for patches.
 - **Dates**: `model.Date` is a calendar date serialized as `"YYYY-MM-DD"` (JSON and SQL). `due_date` = deadline, `scheduled_for` = the day you work on it (it replaced the old `daily` column).
 - **Repeat**: `tasks.repeat` (migration 00007) holds a `model.Repeat` string (`daily|weekdays|weekly:1,4|monthly:15`), canonicalized by the service. `TaskService.Patch` with `done: true` on a repeating root task clears the rule on it and `spawnNext` creates the next copy (`nextDates`: shift both dates to the next matching day, never before today); if creating fails, the completion is rolled back. Frontend mirror: `lib/repeat.ts`.
+- **Search**: `GET /tasks?q=` → `TaskFilter.Search` → `title ILIKE … OR note ILIKE …` (`%`/`_`/`\` escaped; case folding follows the DB's `lc_ctype`, so Cyrillic depends on the server locale). Root tasks only, like every list.
 - **Order** lives in the DB (`position`), one column shared by all reorder scopes (`project`, `inbox`, `day`).
 - **Migrations**: goose, `migrations/NNNNN_name.sql`, embedded via the `migrations` package (`migrations/embed.go`) and applied by `storage.Migrate` at API start. Every migration must be reversible; data columns are renamed, never dropped. `NewPostgresRepo(db)` does not open connections or migrate.
 - **Errors**: sentinels in `internal/model/errors.go`; `transport.WriteError` maps them via the `errorCodes` table to status + `{code, message}`; unknown errors are logged and returned as 500.
 
 ### Frontend
 
-- `App.tsx` holds routes: `/today` (default), `/plan`, `/week` (`?from=&day=`; tab «неделя»), `/lists`, `/lists/:id` (number or `inbox|all|today|week|overdue`), `/archive`, and `/task/:id` — a sheet rendered over the screen stored in `location.state.background`.
+- `App.tsx` holds routes: `/today` (default), `/plan`, `/week` (`?from=&day=`; tab «неделя»), `/search` (`?q=`), `/lists`, `/lists/:id` (number or `inbox|all|today|week|overdue`), `/archive`, and `/task/:id` — a sheet rendered over the screen stored in `location.state.background`.
 - `api/` — `client.ts` (`request`, `ApiError{status, code}`, `errorText` maps API codes to Russian UI text), `tasks.ts`, `projects.ts`, `day.ts`, `types.ts`.
 - `hooks/useTasks.ts` (`useTasks`, `useTask`, `useArchive`, counters), `useDay.ts`, `useProjects.ts`, `useActivity.ts`: optimistic mutations with rollback; `lib/sync.ts` is a "data changed" bus — after a mutation every other subscribed hook silently refetches.
 - `lib/date.ts` does all calendar math on local `YYYY-MM-DD` strings (never through UTC `Date` parsing), and every GET sends the client's `today=`. `lib/format.ts` holds priorities, sections, pluralization. `lib/quickAdd.ts` parses quick-add input (`#list`, `!срочно|!важно|!обычно`, `ДД.ММ`/`завтра`/`пн…вс` → due date, the same with `@` or `@сегодня` → `scheduled_for`).

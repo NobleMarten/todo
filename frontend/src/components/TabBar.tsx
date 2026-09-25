@@ -8,7 +8,7 @@ const TABS = [
     to: '/lists',
     label: 'списки',
     icon: <LinesIcon size={20} />,
-    match: (p: string) => p.startsWith('/lists'),
+    match: (p: string) => p.startsWith('/lists') || p === '/search',
   },
   { to: '/archive', label: 'итоги', icon: <ChartIcon size={20} />, match: (p: string) => p === '/archive' },
 ]
