@@ -1,7 +1,8 @@
 import type { DateStr, Priority, Project } from '../api/types'
 import { addDays, fromDateStr, toDateStr } from './date'
 
-// Быстрый ввод: «докер для todo #todo !срочно 25.09» → заголовок + список + приоритет + дедлайн.
+// Быстрый ввод: «докер для todo #todo !срочно 25.09 @завтра» → заголовок + список + приоритет + дедлайн + день работы.
+// Дата без «@» — дедлайн (due_date), с «@» — когда сажусь за неё (scheduled_for).
 // Распознаются только отдельные слова; каждого вида берётся первое совпадение,
 // повторы и нераспознанные #теги остаются частью заголовка.
 
@@ -10,6 +11,7 @@ export interface QuickParse {
   project?: Project
   priority?: Priority
   dueDate?: DateStr
+  scheduledFor?: DateStr
 }
 
 const PRIORITY_WORDS: Record<string, Priority> = {
@@ -111,6 +113,13 @@ export function parseQuickAdd(input: string, projects: Project[], today: DateStr
     if (!out.priority && PRIORITY_WORDS[lower]) {
       out.priority = PRIORITY_WORDS[lower]
       continue
+    }
+    if (!out.scheduledFor && lower.length > 1 && lower.startsWith('@')) {
+      const d = lower === '@сегодня' ? today : parseDateWord(word.slice(1), today)
+      if (d) {
+        out.scheduledFor = d
+        continue
+      }
     }
     if (!out.dueDate) {
       const d = parseDateWord(word, today)

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import { getDay, getSuggestions, planDay } from '../api/day'
-import { deleteTask, patchTask, reorderTasks } from '../api/tasks'
+import { patchTask, reorderTasks } from '../api/tasks'
 import type { DateStr, Day, Suggestions, Task, TaskPatch } from '../api/types'
 import { todayStr } from '../lib/date'
+import { scheduleDelete } from '../lib/pendingDelete'
 import { notifyChanged, subscribeChanges } from '../lib/sync'
 
 type ActiveBlock = 'planned' | 'overdue' | 'carry_over'
@@ -132,11 +133,13 @@ export function useDay() {
     [run],
   )
 
-  /** Удалить (свайп влево): задача сразу пропадает из своего блока. */
-  const remove = useCallback(
-    (id: number) => run((d) => without(d, new Set([id])), () => deleteTask(id)),
-    [run],
-  )
+  /** Удалить (свайп влево) с «вернуть»: задача сразу пропадает из своего блока, запрос — через 5 с. */
+  const remove = useCallback((id: number) => {
+    const d = dayRef.current
+    const task = d && [...d.planned, ...d.overdue, ...d.carry_over].find((t) => t.id === id)
+    setDay((prev) => (prev ? without(prev, new Set([id])) : prev))
+    scheduleDelete(id, task?.title ?? '')
+  }, [])
 
   /** «Перенести на сегодня»: одним POST /day/plan, задачи встают в конец плана. */
   const moveToToday = useCallback(

@@ -17,7 +17,7 @@ import type { QuickParse } from '../lib/quickAdd'
 import { groupTasks, PROJECT_NAME_MAX, sectionsFor, type Grouping } from '../lib/format'
 
 // подсказка синтаксиса быстрого ввода в пустом списке
-const QUICK_ADD_HINT = 'в поле внизу: «#список», «!срочно» / «!важно», «завтра», «пт» или «25.09»'
+const QUICK_ADD_HINT = 'в поле внизу: «#список», «!срочно» / «!важно», дедлайн «пт» или «25.09», день работы «@завтра»'
 
 const SMART: Record<string, { spec: ListSpec; title: string; empty: string }> = {
   inbox: { spec: { view: 'inbox' }, title: 'входящие', empty: 'во входящих пусто' },
@@ -68,7 +68,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
   const title = smartTitle ?? project?.name ?? ''
   const canAdd = spec.view === 'project' || spec.view === 'inbox' || spec.view === 'all' || spec.view === 'today'
 
-  // #список из быстрого ввода важнее текущего списка; в «сегодня» задача ещё и планируется на сегодня
+  // #список из быстрого ввода важнее текущего списка; в «сегодня» задача ещё и планируется на сегодня (если не задан @день)
   const addTask = async (p: QuickParse) => {
     const target = p.project ?? project
     const created = await add({
@@ -76,7 +76,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       project_id: target ? target.id : projectId,
       priority: p.priority,
       due_date: p.dueDate,
-      scheduled_for: spec.view === 'today' ? today : undefined,
+      scheduled_for: p.scheduledFor ?? (spec.view === 'today' ? today : undefined),
     })
     if (!created) return null
     return matchesSpec(created, spec, today) ? {} : { hint: `добавлено в «${target?.name ?? 'входящие'}»` }

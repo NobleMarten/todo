@@ -1,3 +1,4 @@
+import { visible } from '../lib/deleting'
 import { request } from './client'
 import type { DateStr, ListResponse, NewTask, ReorderScope, Task, TaskPatch, View } from './types'
 
@@ -16,12 +17,15 @@ export type ListParams = {
 
 export async function listTasks(params: ListParams): Promise<ListResponse<Task>> {
   const data = await request<ListResponse<Task> | null>('GET', '/tasks', { query: params })
-  return { items: data?.items ?? [], total: data?.total ?? 0 }
+  const items = data?.items ?? []
+  const shown = visible(items)
+  return { items: shown, total: Math.max(0, (data?.total ?? 0) - (items.length - shown.length)) }
 }
 
 /** Задача вместе с подзадачами. */
-export function getTask(id: number): Promise<Task> {
-  return request<Task>('GET', `/tasks/${id}`)
+export async function getTask(id: number): Promise<Task> {
+  const t = await request<Task>('GET', `/tasks/${id}`)
+  return t.subtasks ? { ...t, subtasks: visible(t.subtasks) } : t
 }
 
 export function createTask(t: NewTask): Promise<Task> {

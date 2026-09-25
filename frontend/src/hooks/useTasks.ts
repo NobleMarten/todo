@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { errorText } from '../api/client'
 import {
   createTask,
-  deleteTask,
   getTask,
   listTasks,
   patchTask,
@@ -10,6 +9,7 @@ import {
 } from '../api/tasks'
 import type { DateStr, NewTask, ReorderScope, Stats, Task, TaskPatch } from '../api/types'
 import { addDays, todayStr } from '../lib/date'
+import { scheduleDelete } from '../lib/pendingDelete'
 import { notifyChanged, subscribeChanges } from '../lib/sync'
 
 // Что показывает экран списка: смарт-вид или конкретный список.
@@ -156,19 +156,12 @@ export function useTasks(spec: ListSpec) {
     [fail, refresh],
   )
 
-  const remove = useCallback(
-    async (id: number) => {
-      const snapshot = tasksRef.current
-      setTasks((prev) => prev.filter((t) => t.id !== id))
-      try {
-        await deleteTask(id)
-        notifyChanged(refresh)
-      } catch (e) {
-        fail(e, snapshot)
-      }
-    },
-    [fail, refresh],
-  )
+  /** Удалить с «вернуть»: строка пропадает сразу, запрос — через 5 с (lib/pendingDelete). */
+  const remove = useCallback((id: number) => {
+    const task = tasksRef.current.find((t) => t.id === id)
+    setTasks((prev) => prev.filter((t) => t.id !== id))
+    scheduleDelete(id, task?.title ?? '')
+  }, [])
 
   /**
    * Перестановка внутри одного отрезка списка (секции или её части). Остальные задачи
@@ -301,22 +294,19 @@ export function useTask(id: number | null) {
     [run],
   )
 
-  const removeSubtask = useCallback(
-    (sid: number) =>
-      run((t) => ({ ...t, subtasks: t.subtasks?.filter((s) => s.id !== sid) }), () => deleteTask(sid)),
-    [run],
-  )
+  const removeSubtask = useCallback((sid: number) => {
+    const sub = taskRef.current?.subtasks?.find((s) => s.id === sid)
+    setTask((t) => (t ? { ...t, subtasks: t.subtasks?.filter((s) => s.id !== sid) } : t))
+    scheduleDelete(sid, sub?.title ?? '')
+    notifyChanged(refresh) // счётчик подзадач в строках списка
+  }, [refresh])
 
+  /** Удалить задачу с «вернуть»; карточку закрывает вызывающий. */
   const remove = useCallback(async () => {
     if (id === null) return false
-    try {
-      await deleteTask(id)
-      notifyChanged(refresh) // себя не перечитываем: задачи уже нет
-      return true
-    } catch (e) {
-      setActionError(errorText(e))
-      return false
-    }
+    scheduleDelete(id, taskRef.current?.title ?? '')
+    notifyChanged(refresh)
+    return true
   }, [id, refresh])
 
   return {

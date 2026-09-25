@@ -1272,3 +1272,28 @@ ul { list-style: none; }
 .login-error { font-size: 13px; color: var(--danger); }
 .login-form .btn-big { flex: none; }
 .logout-btn { display: block; margin: 32px auto 0; }
+
+/* ── тост «удалено · вернуть» ─────────────────────────────────────────────── */
+/* над таб-баром / полем быстрого ввода (оба ~80 px + safe-area), под шитом карточки нет: шит закрывается при удалении */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 60;
+  translate: -50% 0;
+  width: min(560px, calc(100% - 32px));
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 0 6px 0 16px;
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .35);
+  font-size: 14px;
+}
+.toast-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); text-align: left; }
+.toast-action { min-height: 44px; padding: 0 12px; color: var(--accent); font-weight: 600; }
+.toast-error { border-color: var(--danger); }
+.toast-error .toast-text { color: var(--danger); white-space: normal; padding: 10px 0; }

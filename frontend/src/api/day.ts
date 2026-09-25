@@ -1,10 +1,11 @@
+import { visible } from '../lib/deleting'
 import { request } from './client'
 import type { DateStr, Day, DayCount, Suggestions, Task } from './types'
 
 /** Экран «Сегодня»: план, просроченное, недоделанное и выполненное за день. */
 export async function getDay(date: DateStr): Promise<Day> {
   const d = await request<Day>('GET', '/day', { query: { date } })
-  const list = (xs: Task[] | null | undefined) => xs ?? []
+  const list = (xs: Task[] | null | undefined) => visible(xs ?? [])
   return {
     ...d,
     planned: list(d.planned),
@@ -17,7 +18,7 @@ export async function getDay(date: DateStr): Promise<Day> {
 /** Материал для «Собрать день». */
 export async function getSuggestions(date: DateStr): Promise<Suggestions> {
   const s = await request<Suggestions>('GET', '/day/suggestions', { query: { date } })
-  return { overdue: s.overdue ?? [], due_soon: s.due_soon ?? [], stale: s.stale ?? [] }
+  return { overdue: visible(s.overdue ?? []), due_soon: visible(s.due_soon ?? []), stale: visible(s.stale ?? []) }
 }
 
 /** Добавить задачи в план дня и/или убрать из него (scheduled_for = date / null). */

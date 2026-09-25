@@ -3,7 +3,7 @@ import type { Project } from '../api/types'
 import { shortDate, todayStr } from '../lib/date'
 import { PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
 import { parseQuickAdd, suggestProjects, tagOf, typingTag, type QuickParse } from '../lib/quickAdd'
-import { CalendarIcon, PlusIcon, SpinIcon } from './icons'
+import { CalendarIcon, PlusIcon, SpinIcon, TargetIcon } from './icons'
 
 interface Props {
   placeholder: string
@@ -15,15 +15,16 @@ interface Props {
 
 /**
  * Поле быстрого добавления, пристыкованное к низу экрана списка (макет B2).
- * Разбор #списка, !приоритета и дедлайна — lib/quickAdd; распознанное показывается чипами до отправки.
+ * Разбор #списка, !приоритета, дедлайна и @дня работы — lib/quickAdd; распознанное показывается чипами до отправки.
  */
 export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
   const [hint, setHint] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const parsed = parseQuickAdd(text, projects, todayStr())
-  const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate)
+  const today = todayStr()
+  const parsed = parseQuickAdd(text, projects, today)
+  const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate || parsed.scheduledFor)
   // набирается #тег — под полем подсказки списков, по нажатию тег дописывается целиком
   const tag = parsed.project ? null : typingTag(text)
   const suggestions = tag === null ? [] : suggestProjects(tag, projects).slice(0, 6)
@@ -92,6 +93,12 @@ export function QuickAdd({ placeholder, label, projects, onAdd }: Props) {
                 <span className="chip chip-mono quick-chip">
                   <CalendarIcon />
                   дедлайн {shortDate(parsed.dueDate)}
+                </span>
+              )}
+              {parsed.scheduledFor && (
+                <span className="chip chip-mono quick-chip">
+                  <TargetIcon />
+                  делаю {parsed.scheduledFor === today ? 'сегодня' : shortDate(parsed.scheduledFor)}
                 </span>
               )}
             </>

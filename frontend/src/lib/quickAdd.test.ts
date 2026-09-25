@@ -169,6 +169,24 @@ describe('parseQuickAdd', () => {
     expect(parseQuickAdd('!потом разобрать почту', PROJECTS, TODAY)).toEqual({ title: '!потом разобрать почту' })
   })
 
+  it('@дата — день работы, без @ — дедлайн', () => {
+    expect(parseQuickAdd('созвон @завтра', PROJECTS, TODAY)).toEqual({ title: 'созвон', scheduledFor: '2026-09-26' })
+    expect(parseQuickAdd('созвон @сегодня', PROJECTS, TODAY)).toEqual({ title: 'созвон', scheduledFor: TODAY })
+    expect(parseQuickAdd('@Сегодня созвон', PROJECTS, TODAY)).toEqual({ title: 'созвон', scheduledFor: TODAY })
+    expect(parseQuickAdd('курсовая 04.10 @пн', PROJECTS, TODAY)).toEqual({
+      title: 'курсовая',
+      dueDate: '2026-10-04',
+      scheduledFor: '2026-09-28',
+    })
+    expect(parseQuickAdd('отчёт @01.10 @02.10', PROJECTS, TODAY)).toEqual({ title: 'отчёт @02.10', scheduledFor: '2026-10-01' })
+  })
+
+  it('@ без даты — часть заголовка; «сегодня» без @ — тоже', () => {
+    expect(parseQuickAdd('написать @vasya', PROJECTS, TODAY)).toEqual({ title: 'написать @vasya' })
+    expect(parseQuickAdd('письмо @', PROJECTS, TODAY)).toEqual({ title: 'письмо @' })
+    expect(parseQuickAdd('сделать сегодня', PROJECTS, TODAY)).toEqual({ title: 'сделать сегодня' })
+  })
+
   it('заголовок может остаться пустым', () => {
     expect(parseQuickAdd('#todo завтра', PROJECTS, TODAY)).toEqual({ title: '', project: TODO, dueDate: '2026-09-26' })
   })

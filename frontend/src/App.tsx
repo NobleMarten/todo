@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
 import { TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
+import { UndoToast } from './components/UndoToast'
 import { useAuth } from './hooks/useAuth'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { hidesTabBar } from './lib/nav'
@@ -66,6 +67,7 @@ export default function App() {
       </main>
       {!hidesTabBar(basePath) && <TabBar pathname={basePath} />}
       {taskId !== null && <TaskSheet key={taskId} id={taskId} onClose={closeSheet} />}
+      <UndoToast />
     </div>
   )
 }
