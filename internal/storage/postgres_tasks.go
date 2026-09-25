@@ -24,7 +24,7 @@ func NewPostgresRepo(db *sql.DB) *PostgresRepo {
 
 // taskColumns — порядок колонок, который ожидает scanTask. Все запросы задач идут с алиасом t.
 const taskColumns = "t.id, t.title, t.done, t.priority, t.project_id, t.parent_id, t.due_date, t.scheduled_for, " +
-	"t.position, t.note, t.created_at, t.done_at, t.updated_at"
+	"t.position, t.note, t.created_at, t.done_at, t.updated_at, t.repeat"
 
 // statsJoin добавляет к строке задачи прогресс её подзадач (по индексу tasks(parent_id)).
 const statsJoin = ` LEFT JOIN LATERAL (
@@ -45,7 +45,7 @@ type queryer interface {
 func scanTask(row rowScanner, extra ...any) (model.Task, error) {
 	var task model.Task
 	dest := []any{&task.ID, &task.Title, &task.Done, &task.Priority, &task.ProjectID, &task.ParentID,
-		&task.DueDate, &task.ScheduledFor, &task.Position, &task.Note, &task.CreatedAt, &task.DoneAt, &task.UpdatedAt}
+		&task.DueDate, &task.ScheduledFor, &task.Position, &task.Note, &task.CreatedAt, &task.DoneAt, &task.UpdatedAt, &task.Repeat}
 	err := row.Scan(append(dest, extra...)...)
 	return task, err
 }
@@ -63,8 +63,8 @@ func scanTaskWithStats(row rowScanner) (model.Task, error) {
 
 func (pr *PostgresRepo) CreateTask(ctx context.Context, nt NewTask) (model.Task, error) {
 	// новая задача встаёт в конец любого списка, куда попадёт
-	query := `INSERT INTO tasks AS t (title, priority, project_id, parent_id, due_date, scheduled_for, position)
-		VALUES (@title, @priority, @project_id, @parent_id, @due_date, @scheduled_for,
+	query := `INSERT INTO tasks AS t (title, priority, project_id, parent_id, due_date, scheduled_for, note, repeat, position)
+		VALUES (@title, @priority, @project_id, @parent_id, @due_date, @scheduled_for, @note, @repeat,
 			(SELECT COALESCE(MAX(position), 0) + 1 FROM tasks))
 		RETURNING ` + taskColumns
 	args := pgx.NamedArgs{
@@ -74,6 +74,8 @@ func (pr *PostgresRepo) CreateTask(ctx context.Context, nt NewTask) (model.Task,
 		"parent_id":     nt.ParentID,
 		"due_date":      dateArg(nt.DueDate),
 		"scheduled_for": dateArg(nt.ScheduledFor),
+		"note":          nt.Note,
+		"repeat":        nt.Repeat,
 	}
 	task, err := scanTask(pr.db.QueryRowContext(ctx, query, args))
 	if err != nil {
@@ -192,6 +194,10 @@ func (pr *PostgresRepo) PatchTask(ctx context.Context, id int, p TaskPatch) (mod
 	if p.Note.Set {
 		sets = append(sets, "note = @note")
 		args["note"] = p.Note.Value
+	}
+	if p.Repeat.Set {
+		sets = append(sets, "repeat = @repeat")
+		args["repeat"] = p.Repeat.Value
 	}
 
 	tx, err := pr.db.BeginTx(ctx, nil)

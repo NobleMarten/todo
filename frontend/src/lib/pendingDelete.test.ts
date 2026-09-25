@@ -15,6 +15,7 @@ const task = (id: number): Task => ({
   scheduled_for: null,
   position: id,
   note: null,
+  repeat: null,
   created_at: '',
   done_at: null,
   updated_at: '',

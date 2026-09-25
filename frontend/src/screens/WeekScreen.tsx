@@ -73,6 +73,7 @@ export function WeekScreen() {
       priority: p.priority,
       due_date: p.dueDate,
       scheduled_for: p.scheduledFor ?? selected,
+      repeat: p.repeat,
     })
     if (!created) return null
     const when = created.scheduled_for

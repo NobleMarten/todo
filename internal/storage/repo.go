@@ -65,6 +65,8 @@ type NewTask struct {
 	ParentID     *int
 	DueDate      *model.Date
 	ScheduledFor *model.Date
+	Note         *string
+	Repeat       *string // каноническая строка model.Repeat
 }
 
 // TaskPatch — изменения задачи. Title/Done/Priority не бывают null, поэтому это просто указатели;
@@ -79,11 +81,12 @@ type TaskPatch struct {
 	DueDate      model.Opt[model.Date]
 	ScheduledFor model.Opt[model.Date]
 	Note         model.Opt[string]
+	Repeat       model.Opt[string]
 }
 
 func (p TaskPatch) Empty() bool {
 	return p.Title == nil && p.Done == nil && p.Priority == nil && !p.ProjectID.Set &&
-		!p.ParentID.Set && !p.DueDate.Set && !p.ScheduledFor.Set && !p.Note.Set
+		!p.ParentID.Set && !p.DueDate.Set && !p.ScheduledFor.Set && !p.Note.Set && !p.Repeat.Set
 }
 
 type ProjectPatch struct {

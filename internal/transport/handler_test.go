@@ -423,3 +423,25 @@ func TestWeekHandler(t *testing.T) {
 	do(t, h, "GET", "/day/week?from=21.09", "").expect(t, 400, "INVALID_DATE")
 	do(t, h, "GET", "/day/week", "").expect(t, 200, "")
 }
+
+func TestRepeatHandler(t *testing.T) {
+	h, repo := newTestServer(t)
+	do(t, h, "POST", "/tasks", `{"title":"x","repeat":"yearly"}`).expect(t, 400, "INVALID_REPEAT")
+	var task model.Task
+	res := do(t, h, "POST", "/tasks", `{"title":"зарядка","repeat":"daily","scheduled_for":"2026-09-25"}`)
+	res.expect(t, 201, "")
+	res.decode(t, &task)
+	if task.Repeat == nil || *task.Repeat != "daily" {
+		t.Fatalf("repeat: %v", task.Repeat)
+	}
+	do(t, h, "PATCH", "/tasks/1", `{"repeat":"weekly:9"}`).expect(t, 400, "INVALID_REPEAT")
+	do(t, h, "PATCH", "/tasks/1", `{"done":true}`).expect(t, 200, "")
+	if len(repo.Tasks) != 2 || repo.Tasks[1].Repeat == nil {
+		t.Fatalf("следующая не создана: %+v", repo.Tasks)
+	}
+	res = do(t, h, "PATCH", "/tasks/2", `{"repeat":null}`)
+	res.expect(t, 200, "")
+	if !strings.Contains(res.Body.String(), `"repeat":null`) {
+		t.Fatalf("repeat null: %s", res.Body.String())
+	}
+}

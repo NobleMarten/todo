@@ -140,9 +140,12 @@ export function useTasks(spec: ListSpec) {
   const update = useCallback(
     async (id: number, patch: TaskPatch) => {
       const snapshot = tasksRef.current
+      const repeats = patch.done === true && snapshot.some((t) => t.id === id && t.repeat)
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)))
       try {
         const saved = await patchTask(id, patch)
+        // выполнили повторяющуюся — сервер создал следующую, её надо подтянуть и в этот вид
+        if (repeats) void refresh()
         setTasks((prev) =>
           saved.done || !matchesSpec(saved, specRef.current, todayStr())
             ? prev.filter((t) => t.id !== id)

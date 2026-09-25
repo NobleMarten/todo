@@ -886,7 +886,8 @@ ul { list-style: none; }
   color: var(--muted);
 }
 .date-field-value { font-size: 14.5px; color: var(--text); }
-.date-field-value.empty { color: var(--faint); }
+/* не .empty: это класс пустых состояний экранов (пунктирная рамка) */
+.date-field-value.is-empty { color: var(--faint); }
 .date-field-rel { font-family: var(--mono); font-size: 11px; color: var(--danger); white-space: nowrap; }
 /* «убрать» лежит поверх прозрачного нативного поля */
 .date-field-clear {
@@ -1404,3 +1405,12 @@ ul { list-style: none; }
 [data-theme='light'] .week-cell.selected .week-cell-num { color: #fff; }
 [data-theme='light'] .week-cell.selected .week-cell-wd { color: rgba(255, 255, 255, .75); }
 [data-theme='light'] .week-cell.selected .week-dot { background: rgba(255, 255, 255, .8) !important; }
+
+/* ── повтор ───────────────────────────────────────────────────────────────── */
+.badge-icon { padding: 4px 5px; }
+.badge-icon svg { width: 11px; height: 11px; }
+.repeat-field { display: flex; flex-direction: column; gap: 8px; }
+.date-field.set-repeat { border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.date-field.set-repeat .date-field-icon { color: var(--ok); }
+.repeat-days { display: flex; flex-wrap: wrap; gap: 6px; padding-left: 2px; }
+.repeat-days .chip { min-width: 40px; justify-content: center; }

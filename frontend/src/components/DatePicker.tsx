@@ -53,7 +53,7 @@ export function DatePicker({ kind, label, value, today, onChange }: Props) {
       <span className="date-field-text">
         <span className="date-field-label">{label}</span>
         <span className="date-field-line">
-          <span className={`date-field-value ${value ? '' : 'empty'}`}>{value ? fieldDateLabel(value) : 'не задано'}</span>
+          <span className={`date-field-value ${value ? '' : 'is-empty'}`}>{value ? fieldDateLabel(value) : 'не задано'}</span>
           {kind === 'due' && value && (
             <span className={`date-field-rel ${overdue ? 'overdue' : ''}`}>{relativeLabel(value, today)}</span>
           )}

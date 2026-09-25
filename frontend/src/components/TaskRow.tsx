@@ -8,7 +8,8 @@ import { NativeDateInput } from './DatePicker'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { SwipeRow } from './SwipeRow'
 import { useOpenTask } from '../hooks/useOpenTask'
-import { CalendarIcon, CheckIcon, GripIcon, SpinIcon } from './icons'
+import { CalendarIcon, CheckIcon, GripIcon, RepeatIcon, SpinIcon } from './icons'
+import { ruleLabel } from '../lib/repeat'
 
 interface Props {
   task: Task
@@ -94,6 +95,11 @@ export function TaskRow({
         </button>
 
         <span className="task-badges">
+          {task.repeat && (
+            <span className="badge badge-icon" title={ruleLabel(task.repeat)} aria-label={`повтор: ${ruleLabel(task.repeat)}`}>
+              <RepeatIcon />
+            </span>
+          )}
           {stats && stats.total > 0 && (
             <button
               className="badge badge-btn"

@@ -26,4 +26,5 @@ var (
 	ErrInvalidColor           = errors.New("invalid color, want #RRGGBB")
 	ErrUnauthorized           = errors.New("login required")
 	ErrWrongPassword          = errors.New("wrong password")
+	ErrInvalidRepeat          = errors.New("invalid repeat rule, want daily|weekdays|weekly:1,4|monthly:15")
 )

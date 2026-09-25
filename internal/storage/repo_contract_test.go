@@ -208,6 +208,27 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 	})
 
+	t.Run("repeat and note on create", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		task := mustCreate(t, r, NewTask{Title: "зарядка", ScheduledFor: &d0, Note: ptr("10 мин"), Repeat: ptr("daily")})
+		if task.Repeat == nil || *task.Repeat != "daily" || task.Note == nil || *task.Note != "10 мин" {
+			t.Fatalf("create: repeat %v note %v", task.Repeat, task.Note)
+		}
+		got, err := r.PatchTask(ctx, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("weekly:1,4")}})
+		if err != nil || got.Repeat == nil || *got.Repeat != "weekly:1,4" {
+			t.Fatalf("patch repeat: %v, %v", got.Repeat, err)
+		}
+		got, err = r.PatchTask(ctx, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true}})
+		if err != nil || got.Repeat != nil {
+			t.Fatalf("null repeat: %v, %v", got.Repeat, err)
+		}
+		plain := mustCreate(t, r, NewTask{Title: "обычная"})
+		if plain.Repeat != nil || plain.Note != nil {
+			t.Fatalf("без repeat/note: %v %v", plain.Repeat, plain.Note)
+		}
+	})
+
 	t.Run("subtasks follow parent", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()

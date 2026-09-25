@@ -15,6 +15,7 @@ type CreateTaskRequest struct {
 	ParentID     *int        `json:"parent_id"`
 	DueDate      *model.Date `json:"due_date"`
 	ScheduledFor *model.Date `json:"scheduled_for"`
+	Repeat       *string     `json:"repeat"`
 }
 
 // PatchTaskRequest: отсутствующий ключ — не трогать, null — очистить (см. model.Opt).
@@ -27,6 +28,7 @@ type PatchTaskRequest struct {
 	DueDate      model.Opt[model.Date] `json:"due_date"`
 	ScheduledFor model.Opt[model.Date] `json:"scheduled_for"`
 	Note         model.Opt[string]     `json:"note"`
+	Repeat       model.Opt[string]     `json:"repeat"`
 }
 
 type ReorderTasksRequest struct {
@@ -76,6 +78,7 @@ func (req PatchTaskRequest) toPatch() (storage.TaskPatch, error) {
 		DueDate:      req.DueDate,
 		ScheduledFor: req.ScheduledFor,
 		Note:         req.Note,
+		Repeat:       req.Repeat,
 	}, nil
 }
 
@@ -166,6 +169,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 		ParentID:     req.ParentID,
 		DueDate:      req.DueDate,
 		ScheduledFor: req.ScheduledFor,
+		Repeat:       req.Repeat,
 	})
 	if err != nil {
 		WriteError(w, err)

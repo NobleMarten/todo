@@ -37,6 +37,7 @@ var errorCodes = []struct {
 	{model.ErrInvalidView, http.StatusBadRequest, "INVALID_VIEW"},
 	{model.ErrInvalidQuery, http.StatusBadRequest, "INVALID_QUERY"},
 	{model.ErrInvalidBody, http.StatusBadRequest, "INVALID_BODY"},
+	{model.ErrInvalidRepeat, http.StatusBadRequest, "INVALID_REPEAT"},
 	{model.ErrUnauthorized, http.StatusUnauthorized, "UNAUTHORIZED"},
 	{model.ErrWrongPassword, http.StatusUnauthorized, "WRONG_PASSWORD"},
 }

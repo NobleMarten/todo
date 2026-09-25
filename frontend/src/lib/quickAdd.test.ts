@@ -187,6 +187,35 @@ describe('parseQuickAdd', () => {
     expect(parseQuickAdd('сделать сегодня', PROJECTS, TODAY)).toEqual({ title: 'сделать сегодня' })
   })
 
+  it('повтор: без дат — «делаю» ближайший день по правилу', () => {
+    expect(parseQuickAdd('зарядка ежедневно', PROJECTS, TODAY)).toEqual({
+      title: 'зарядка',
+      repeat: 'daily',
+      scheduledFor: TODAY,
+    })
+    // пятница → ближайший будний сегодня
+    expect(parseQuickAdd('стендап по-будням', PROJECTS, TODAY)).toEqual({
+      title: 'стендап',
+      repeat: 'weekdays',
+      scheduledFor: TODAY,
+    })
+    expect(parseQuickAdd('стендап по-будням', PROJECTS, '2026-09-26')).toMatchObject({ scheduledFor: '2026-09-28' })
+  })
+
+  it('повтор от даты задачи', () => {
+    expect(parseQuickAdd('отчёт еженедельно @пн', PROJECTS, TODAY)).toEqual({
+      title: 'отчёт',
+      repeat: 'weekly:1',
+      scheduledFor: '2026-09-28',
+    })
+    expect(parseQuickAdd('аренда 05.10 ежемесячно', PROJECTS, TODAY)).toEqual({
+      title: 'аренда',
+      repeat: 'monthly:5',
+      dueDate: '2026-10-05',
+    })
+    expect(parseQuickAdd('Ежедневно ежемесячно x', PROJECTS, TODAY)).toMatchObject({ title: 'ежемесячно x', repeat: 'daily' })
+  })
+
   it('заголовок может остаться пустым', () => {
     expect(parseQuickAdd('#todo завтра', PROJECTS, TODAY)).toEqual({ title: '', project: TODO, dueDate: '2026-09-26' })
   })

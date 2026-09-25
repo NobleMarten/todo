@@ -8,6 +8,7 @@ import { todayStr } from '../lib/date'
 import { PRIORITIES, PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
 import { DatePicker } from './DatePicker'
 import { ProjectPicker } from './ProjectPicker'
+import { RepeatField } from './RepeatField'
 import { Sheet } from './Sheet'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { BackIcon, CheckIcon, CloseIcon, SpinIcon, TrashIcon } from './icons'
@@ -150,6 +151,13 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
           today={today}
           onChange={(v) => update({ scheduled_for: v })}
         />
+        {!isSubtask && !task.done && (
+          <RepeatField
+            value={task.repeat}
+            base={task.scheduled_for ?? task.due_date ?? today}
+            onChange={(v) => update({ repeat: v })}
+          />
+        )}
       </div>
 
       {!isSubtask && (

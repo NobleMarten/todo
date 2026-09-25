@@ -66,6 +66,8 @@ func (fr *FakeRepo) CreateTask(_ context.Context, nt NewTask) (model.Task, error
 		ParentID:     clonePtr(nt.ParentID),
 		DueDate:      clonePtr(nt.DueDate),
 		ScheduledFor: clonePtr(nt.ScheduledFor),
+		Note:         clonePtr(nt.Note),
+		Repeat:       clonePtr(nt.Repeat),
 		Position:     pos,
 		CreatedAt:    now,
 		UpdatedAt:    now,
@@ -169,6 +171,9 @@ func (fr *FakeRepo) PatchTask(_ context.Context, id int, p TaskPatch) (model.Tas
 	}
 	if p.Note.Set {
 		t.Note = clonePtr(p.Note.Value)
+	}
+	if p.Repeat.Set {
+		t.Repeat = clonePtr(p.Repeat.Value)
 	}
 	return fr.getTask(id)
 }

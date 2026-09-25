@@ -400,3 +400,115 @@ func TestActivity(t *testing.T) {
 		t.Fatalf("from > to: %v", err)
 	}
 }
+
+func TestNextDates(t *testing.T) {
+	today := model.NewDate(2026, 9, 25) // пт
+	rule := func(s string) model.Repeat {
+		r, err := model.ParseRepeat(s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	d := func(m time.Month, day int) *model.Date { v := model.NewDate(2026, m, day); return &v }
+	str := func(p *model.Date) string {
+		if p == nil {
+			return "-"
+		}
+		return p.String()
+	}
+	cases := []struct {
+		name       string
+		task       model.Task
+		rule       string
+		sched, due string
+	}{
+		{"daily вовремя", model.Task{ScheduledFor: d(9, 25)}, "daily", "2026-09-26", "-"},
+		{"daily с опозданием — не раньше сегодня", model.Task{ScheduledFor: d(9, 20)}, "daily", "2026-09-25", "-"},
+		{"по будням из пятницы — понедельник", model.Task{ScheduledFor: d(9, 25)}, "weekdays", "2026-09-28", "-"},
+		{"только дедлайн", model.Task{DueDate: d(9, 25)}, "weekly:5", "-", "2026-10-02"},
+		{"обе даты сдвигаются вместе", model.Task{ScheduledFor: d(9, 23), DueDate: d(9, 25)}, "weekly:3", "2026-09-30", "2026-10-02"},
+		{"без дат — «делаю» по правилу", model.Task{}, "weekly:1", "2026-09-28", "-"},
+		{"без дат, daily — завтра", model.Task{}, "daily", "2026-09-26", "-"},
+		{"monthly:31 → конец октября", model.Task{DueDate: d(9, 30)}, "monthly:31", "-", "2026-10-31"},
+	}
+	for _, c := range cases {
+		s, due := nextDates(c.task, rule(c.rule), today)
+		if str(s) != c.sched || str(due) != c.due {
+			t.Fatalf("%s: got %s / %s, want %s / %s", c.name, str(s), str(due), c.sched, c.due)
+		}
+	}
+}
+
+func TestRepeatOnDone(t *testing.T) {
+	ctx := context.Background()
+	s, repo := newTaskService()
+	today := model.Today(msk)
+	proj, _ := repo.CreateProject(ctx, "Go", "#6AA6FF")
+	task := mustAdd(t, s, storage.NewTask{
+		Title: "зарядка", Priority: "high", ProjectID: &proj.ID, ScheduledFor: &today, Repeat: ptr(" weekly:5,1 "),
+	})
+	if task.Repeat == nil || *task.Repeat != "weekly:1,5" {
+		t.Fatalf("правило не приведено к канону: %v", task.Repeat)
+	}
+	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Note: model.Opt[string]{Set: true, Value: ptr("10 мин")}}); err != nil {
+		t.Fatal(err)
+	}
+
+	done, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !done.Done || done.Repeat != nil {
+		t.Fatalf("выполненная: done=%v repeat=%v (правило должно уехать на следующую)", done.Done, done.Repeat)
+	}
+	if len(repo.Tasks) != 2 {
+		t.Fatalf("задач %d, want 2", len(repo.Tasks))
+	}
+	next := repo.Tasks[1]
+	if next.Done || next.Title != "зарядка" || next.Priority != "high" || next.ProjectID == nil || *next.ProjectID != proj.ID ||
+		next.Note == nil || *next.Note != "10 мин" || next.Repeat == nil || *next.Repeat != "weekly:1,5" {
+		t.Fatalf("следующая: %+v", next)
+	}
+	if next.ScheduledFor == nil || !next.ScheduledFor.After(today) {
+		t.Fatalf("следующая не в будущем: %v", next.ScheduledFor)
+	}
+
+	// сняли галочку — обычная задача, второй копии нет; снова выполнили — тоже нет
+	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(false)}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if len(repo.Tasks) != 2 {
+		t.Fatalf("после снятия/повторного выполнения задач %d, want 2", len(repo.Tasks))
+	}
+}
+
+func TestRepeatValidation(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newTaskService()
+	if _, err := s.Add(ctx, storage.NewTask{Title: "x", Repeat: ptr("hourly")}); !errors.Is(err, model.ErrInvalidRepeat) {
+		t.Fatalf("плохое правило: %v", err)
+	}
+	parent := mustAdd(t, s, storage.NewTask{Title: "p"})
+	if _, err := s.Add(ctx, storage.NewTask{Title: "sub", ParentID: &parent.ID, Repeat: ptr("daily")}); !errors.Is(err, model.ErrInvalidRepeat) {
+		t.Fatalf("подзадача с повтором: %v", err)
+	}
+	sub := mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &parent.ID})
+	if _, err := s.Patch(ctx, sub.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("daily")}}); !errors.Is(err, model.ErrInvalidRepeat) {
+		t.Fatalf("повтор подзадаче: %v", err)
+	}
+	rep := mustAdd(t, s, storage.NewTask{Title: "r", Repeat: ptr("daily")})
+	if _, err := s.Patch(ctx, rep.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true, Value: &parent.ID}}); !errors.Is(err, model.ErrInvalidRepeat) {
+		t.Fatalf("повторяющуюся в подзадачи: %v", err)
+	}
+	if _, err := s.Patch(ctx, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("monthly:40")}}); !errors.Is(err, model.ErrInvalidRepeat) {
+		t.Fatalf("monthly:40: %v", err)
+	}
+	got, err := s.Patch(ctx, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true}})
+	if err != nil || got.Repeat != nil {
+		t.Fatalf("снять повтор: %v, %v", got.Repeat, err)
+	}
+}

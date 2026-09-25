@@ -88,6 +88,18 @@ func (s *TaskService) Add(ctx context.Context, nt storage.NewTask) (model.Task, 
 		return model.Task{}, err
 	}
 
+	if nt.Repeat != nil {
+		if nt.ParentID != nil {
+			return model.Task{}, fmt.Errorf("%w: subtasks cannot repeat", model.ErrInvalidRepeat)
+		}
+		rule, err := model.ParseRepeat(*nt.Repeat)
+		if err != nil {
+			return model.Task{}, err
+		}
+		canon := rule.String()
+		nt.Repeat = &canon
+	}
+
 	if nt.ParentID != nil {
 		parent, err := s.getParent(ctx, *nt.ParentID)
 		if err != nil {
@@ -161,6 +173,14 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 			return model.Task{}, err
 		}
 	}
+	if p.Repeat.Set && p.Repeat.Value != nil {
+		rule, err := model.ParseRepeat(*p.Repeat.Value)
+		if err != nil {
+			return model.Task{}, err
+		}
+		canon := rule.String()
+		p.Repeat.Value = &canon
+	}
 
 	current, err := s.tasks.GetTask(ctx, id)
 	if err != nil {
@@ -202,7 +222,91 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 		p.ProjectID = model.Opt[int]{Set: true, Value: parent.ProjectID}
 	}
 
-	return s.tasks.PatchTask(ctx, id, p)
+	// повторяться может только корневая задача
+	willBeSub := current.ParentID != nil
+	if p.ParentID.Set {
+		willBeSub = p.ParentID.Value != nil
+	}
+	repeat := current.Repeat
+	if p.Repeat.Set {
+		repeat = p.Repeat.Value
+	}
+	if willBeSub && repeat != nil {
+		return model.Task{}, fmt.Errorf("%w: subtasks cannot repeat", model.ErrInvalidRepeat)
+	}
+
+	// Выполнили повторяющуюся — правило уезжает на следующую задачу, у выполненной остаётся история.
+	// Если снять с неё галочку, она станет обычной: вторая копия не появится.
+	if p.Done != nil && *p.Done && repeat != nil {
+		p.Repeat = model.Opt[string]{Set: true}
+	}
+	done, err := s.tasks.PatchTask(ctx, id, p)
+	if err != nil {
+		return model.Task{}, err
+	}
+	if p.Done != nil && *p.Done && repeat != nil {
+		if err := s.spawnNext(ctx, done, *repeat); err != nil {
+			// следующая не создалась — откатываем выполнение, чтобы правило не потерялось
+			_, _ = s.tasks.PatchTask(ctx, id, storage.TaskPatch{
+				Done:   ptrTo(false),
+				Repeat: model.Opt[string]{Set: true, Value: repeat},
+			})
+			return model.Task{}, fmt.Errorf("create next occurrence: %w", err)
+		}
+	}
+	return done, nil
+}
+
+func ptrTo[T any](v T) *T { return &v }
+
+// nextDates — даты следующей копии повторяющейся задачи. Опорная дата — «делаю», иначе дедлайн,
+// иначе сегодня; следующая — первая подходящая после неё, но не раньше сегодня (выполнили с опозданием —
+// не плодим просроченные). Обе даты сдвигаются на одно и то же число дней, промежуток между ними сохраняется.
+// Без дат копия получает «делаю» = следующий день по правилу.
+func nextDates(t model.Task, rule model.Repeat, today model.Date) (scheduled, due *model.Date) {
+	base := today
+	switch {
+	case t.ScheduledFor != nil:
+		base = *t.ScheduledFor
+	case t.DueDate != nil:
+		base = *t.DueDate
+	}
+	next := rule.After(base)
+	if next.Before(today) {
+		next = rule.After(today.AddDays(-1))
+	}
+	shift := model.DaysBetween(base, next)
+	if t.ScheduledFor != nil {
+		d := t.ScheduledFor.AddDays(shift)
+		scheduled = &d
+	}
+	if t.DueDate != nil {
+		d := t.DueDate.AddDays(shift)
+		due = &d
+	}
+	if scheduled == nil && due == nil {
+		scheduled = &next
+	}
+	return scheduled, due
+}
+
+// spawnNext создаёт следующую копию выполненной повторяющейся задачи (без подзадач).
+func (s *TaskService) spawnNext(ctx context.Context, done model.Task, repeat string) error {
+	rule, err := model.ParseRepeat(repeat)
+	if err != nil {
+		return err
+	}
+	scheduled, due := nextDates(done, rule, model.Today(s.loc))
+	_, err = s.tasks.CreateTask(ctx, storage.NewTask{
+		Title:        done.Title,
+		Priority:     done.Priority,
+		ProjectID:    done.ProjectID,
+		DueDate:      due,
+		ScheduledFor: scheduled,
+		Note:         done.Note,
+		Repeat:       &repeat,
+	})
+	return err
 }
 
 func (s *TaskService) Delete(ctx context.Context, id int) error {

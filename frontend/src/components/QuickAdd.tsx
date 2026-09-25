@@ -3,7 +3,8 @@ import type { Project } from '../api/types'
 import { shortDate, todayStr } from '../lib/date'
 import { PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
 import { parseQuickAdd, suggestProjects, tagOf, typingTag, type QuickParse } from '../lib/quickAdd'
-import { CalendarIcon, PlusIcon, SpinIcon, TargetIcon } from './icons'
+import { CalendarIcon, PlusIcon, RepeatIcon, SpinIcon, TargetIcon } from './icons'
+import { ruleLabel } from '../lib/repeat'
 
 interface Props {
   placeholder: string
@@ -25,7 +26,7 @@ export function QuickAdd({ placeholder, label, projects, inline, onAdd }: Props)
   const inputRef = useRef<HTMLInputElement>(null)
   const today = todayStr()
   const parsed = parseQuickAdd(text, projects, today)
-  const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate || parsed.scheduledFor)
+  const hasChips = Boolean(parsed.project || parsed.priority || parsed.dueDate || parsed.scheduledFor || parsed.repeat)
   // набирается #тег — под полем подсказки списков, по нажатию тег дописывается целиком
   const tag = parsed.project ? null : typingTag(text)
   const suggestions = tag === null ? [] : suggestProjects(tag, projects).slice(0, 6)
@@ -100,6 +101,12 @@ export function QuickAdd({ placeholder, label, projects, inline, onAdd }: Props)
                 <span className="chip chip-mono quick-chip">
                   <TargetIcon />
                   делаю {parsed.scheduledFor === today ? 'сегодня' : shortDate(parsed.scheduledFor)}
+                </span>
+              )}
+              {parsed.repeat && (
+                <span className="chip chip-mono quick-chip">
+                  <RepeatIcon />
+                  {ruleLabel(parsed.repeat)}
                 </span>
               )}
             </>

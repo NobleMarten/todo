@@ -1,8 +1,11 @@
 import type { DateStr, Priority, Project } from '../api/types'
 import { addDays, fromDateStr, toDateStr } from './date'
+import { onOrAfter, parseRule, ruleFromWord } from './repeat'
 
 // Быстрый ввод: «докер для todo #todo !срочно 25.09 @завтра» → заголовок + список + приоритет + дедлайн + день работы.
 // Дата без «@» — дедлайн (due_date), с «@» — когда сажусь за неё (scheduled_for).
+// «ежедневно | по-будням | еженедельно | ежемесячно» — повтор; неделя и месяц — от даты задачи (или сегодня),
+// а задача без дат получает «делаю» = ближайший день по правилу.
 // Распознаются только отдельные слова; каждого вида берётся первое совпадение,
 // повторы и нераспознанные #теги остаются частью заголовка.
 
@@ -12,6 +15,7 @@ export interface QuickParse {
   priority?: Priority
   dueDate?: DateStr
   scheduledFor?: DateStr
+  repeat?: string
 }
 
 const PRIORITY_WORDS: Record<string, Priority> = {
@@ -98,6 +102,7 @@ export function parseDateWord(word: string, today: DateStr): DateStr | null {
 export function parseQuickAdd(input: string, projects: Project[], today: DateStr): QuickParse {
   const out: QuickParse = { title: '' }
   const rest: string[] = []
+  let repeatWord: string | null = null
 
   for (const word of input.trim().split(/\s+/)) {
     if (!word) continue
@@ -109,6 +114,10 @@ export function parseQuickAdd(input: string, projects: Project[], today: DateStr
         out.project = p
         continue
       }
+    }
+    if (!repeatWord && ruleFromWord(lower, today)) {
+      repeatWord = lower
+      continue
     }
     if (!out.priority && PRIORITY_WORDS[lower]) {
       out.priority = PRIORITY_WORDS[lower]
@@ -129,6 +138,11 @@ export function parseQuickAdd(input: string, projects: Project[], today: DateStr
       }
     }
     rest.push(word)
+  }
+
+  if (repeatWord) {
+    out.repeat = ruleFromWord(repeatWord, out.scheduledFor ?? out.dueDate ?? today)!
+    if (!out.scheduledFor && !out.dueDate) out.scheduledFor = onOrAfter(parseRule(out.repeat)!, today)
   }
 
   out.title = rest.join(' ')

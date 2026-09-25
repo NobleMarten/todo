@@ -53,6 +53,7 @@ cd frontend && npm install && npm run dev
   "due_date": "2026-09-25",      // дедлайн — когда нельзя позже
   "scheduled_for": "2026-09-24", // делаю — когда сажусь за неё
   "position": 7, "note": null,
+  "repeat": "weekly:1,4",        // повтор: daily | weekdays | weekly:1,4 (1 = пн) | monthly:15; null — нет
   "created_at": "…", "done_at": null, "updated_at": "…",
   "subtask_stats": {"done": 1, "total": 3}   // в выдачах списков
 }
@@ -127,6 +128,12 @@ Cookie работает только при same-origin (фронт и API за 
 `parent_id` можно поставить только задаче без подзадач и только на корневую — иначе `400 SUBTASK_TOO_DEEP`.
 Подзадача живёт в списке родителя: при смене `project_id` у родителя подзадачи переезжают вместе с ним.
 
+**Повтор** (`repeat` в `POST`/`PATCH`, неверное правило — `400 INVALID_REPEAT`, у подзадач повтора нет).
+Когда повторяющуюся задачу выполняют (`done: true`), сервер создаёт следующую копию: тот же заголовок, приоритет,
+список, заметка и правило, без подзадач; даты сдвигаются к следующему дню по правилу (от «делаю», иначе от дедлайна,
+иначе от сегодня), но не раньше сегодня; задача без дат получает «делаю». У выполненной правило снимается, поэтому
+снять с неё галочку и выполнить снова — вторую копию не создаёт.
+
 `scope` у reorder: `{"type": "project", "project_id": 5}`, `{"type": "inbox"}` или
 `{"type": "day", "date": "2026-09-21"}`. `position` = индекс в `ids`, одной транзакцией;
 id не из области видимости игнорируются.
@@ -164,7 +171,7 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
 
 | статус | коды                                                                                     |
 |--------|------------------------------------------------------------------------------------------|
-| 400    | `INVALID_ID`, `INVALID_DATE`, `INVALID_VIEW`, `INVALID_QUERY`, `INVALID_BODY`, `EMPTY_TITLE`, `TITLE_TOO_LONG`, `EMPTY_NAME`, `INVALID_COLOR`, `INVALID_PRIORITY`, `NOTHING_TO_UPDATE`, `NOT_DONE`, `SUBTASK_TOO_DEEP` |
+| 400    | `INVALID_ID`, `INVALID_DATE`, `INVALID_REPEAT`, `INVALID_VIEW`, `INVALID_QUERY`, `INVALID_BODY`, `EMPTY_TITLE`, `TITLE_TOO_LONG`, `EMPTY_NAME`, `INVALID_COLOR`, `INVALID_PRIORITY`, `NOTHING_TO_UPDATE`, `NOT_DONE`, `SUBTASK_TOO_DEEP` |
 | 401    | `UNAUTHORIZED`, `WRONG_PASSWORD`                                                         |
 | 404    | `TASK_NOT_FOUND`, `PROJECT_NOT_FOUND`                                                    |
 | 409    | `ALREADY_DONE`, `ALREADY_UNDONE`                                                         |
@@ -179,6 +186,7 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
 - **Быстрый ввод** в списке: `докер для todo #todo !срочно 25.09` — `#имя` выбирает список (без учёта
   регистра, ё = е, пробелы и дефисы можно опустить, хватает начала имени, если оно однозначно — `#fin`;
   при наборе `#` под полем появляются подсказки списков), `!срочно` / `!важно` / `!обычно` — приоритет,
+  `ежедневно` / `по-будням` / `еженедельно` / `ежемесячно` — повтор (неделя и месяц — от даты задачи),
   `25.09`, `25.09.2027`, `завтра`, `пн`…`вс` — дедлайн, те же даты с `@` (`@завтра`, `@пн`, `@25.09`, `@сегодня`) —
   день работы (`scheduled_for`). Распознанное показывается чипами под полем, нераспознанный `#тег` остаётся в заголовке.
 - **Свайпы по строке**: влево — кнопка «удалить», вправо — «на сегодня».

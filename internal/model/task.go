@@ -13,6 +13,7 @@ type Task struct {
 	ScheduledFor *Date      `json:"scheduled_for"` // день, когда садишься за задачу
 	Position     int        `json:"position"`
 	Note         *string    `json:"note"`
+	Repeat       *string    `json:"repeat"` // правило повтора (model.Repeat), nil — не повторяется
 	CreatedAt    time.Time  `json:"created_at"`
 	DoneAt       *time.Time `json:"done_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`              // последняя правка через PATCH; reorder не считается

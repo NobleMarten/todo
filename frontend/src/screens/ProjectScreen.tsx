@@ -77,6 +77,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       priority: p.priority,
       due_date: p.dueDate,
       scheduled_for: p.scheduledFor ?? (spec.view === 'today' ? today : undefined),
+      repeat: p.repeat,
     })
     if (!created) return null
     return matchesSpec(created, spec, today) ? {} : { hint: `добавлено в «${target?.name ?? 'входящие'}»` }

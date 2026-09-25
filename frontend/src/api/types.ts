@@ -16,6 +16,7 @@ export type Task = {
   scheduled_for: DateStr | null
   position: number
   note: string | null
+  repeat: string | null // правило повтора (lib/repeat), null — не повторяется
   created_at: string
   done_at: string | null
   updated_at: string
@@ -47,6 +48,7 @@ export type NewTask = {
   parent_id?: number | null
   due_date?: DateStr | null
   scheduled_for?: DateStr | null
+  repeat?: string | null
 }
 
 // PATCH: отсутствующий ключ — «не трогать», null — «очистить».
@@ -59,6 +61,7 @@ export type TaskPatch = Partial<{
   due_date: DateStr | null
   scheduled_for: DateStr | null
   note: string | null
+  repeat: string | null
 }>
 
 export type ProjectPatch = Partial<{ name: string; color: string; archived: boolean }>
