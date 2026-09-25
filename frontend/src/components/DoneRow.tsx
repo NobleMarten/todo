@@ -1,5 +1,5 @@
 import type { Project, Task } from '../api/types'
-import { useOpenTask } from './TaskSheet'
+import { useOpenTask } from '../hooks/useOpenTask'
 import { CheckIcon } from './icons'
 
 interface Props {

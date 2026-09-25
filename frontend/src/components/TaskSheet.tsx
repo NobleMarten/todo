@@ -1,7 +1,7 @@
-import { useCallback, useState, type CSSProperties } from 'react'
-import { useLocation, useNavigate, type Location } from 'react-router-dom'
+import { useState, type CSSProperties } from 'react'
 import type { Priority, Task } from '../api/types'
 import { useAutosize } from '../hooks/useAutosize'
+import { useOpenTask } from '../hooks/useOpenTask'
 import { useProjects } from '../hooks/useProjects'
 import { statsOf, useTask } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
@@ -11,25 +11,6 @@ import { ProjectPicker } from './ProjectPicker'
 import { Sheet } from './Sheet'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { BackIcon, CheckIcon, CloseIcon, SpinIcon, TrashIcon } from './icons'
-
-type SheetState = { background?: Location }
-
-/**
- * Открыть карточку задачи поверх текущего экрана. Экран под шитом запоминается
- * в location.state.background; из одной карточки в другую переходим с replace,
- * чтобы «назад» закрывал шит, а не листал карточки.
- */
-export function useOpenTask() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  return useCallback(
-    (id: number) => {
-      const bg = (location.state as SheetState | null)?.background
-      navigate(`/task/${id}`, { state: { background: bg ?? location }, replace: Boolean(bg) })
-    },
-    [navigate, location],
-  )
-}
 
 interface Props {
   id: number

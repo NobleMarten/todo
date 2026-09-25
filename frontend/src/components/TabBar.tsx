@@ -13,15 +13,6 @@ const TABS = [
   { to: '/archive', label: 'итоги', icon: <ChartIcon size={20} />, match: (p: string) => p === '/archive' },
 ]
 
-/**
- * Экраны, где таб-бара нет: внутри списка снизу живёт поле быстрого ввода (макет B2),
- * на «Собрать день» — кнопка «начать день» (макет A2).
- */
-export function hidesTabBar(pathname: string): boolean {
-  if (pathname === '/plan') return true
-  return /^\/lists\/[^/]+$/.test(pathname) && pathname !== '/lists/week'
-}
-
 /** pathname — экран под открытой карточкой задачи, а не сам /task/:id. */
 export function TabBar({ pathname }: { pathname: string }) {
   return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import { getDay, getSuggestions, planDay } from '../api/day'
 import { deleteTask, patchTask, reorderTasks } from '../api/tasks'
@@ -36,7 +36,9 @@ export function useDay() {
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const dayRef = useRef(day)
-  dayRef.current = day
+  useLayoutEffect(() => {
+    dayRef.current = day
+  })
   const reqRef = useRef(0)
 
   const fetchDay = useCallback(async () => {

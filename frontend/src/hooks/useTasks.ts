@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import {
   createTask,
@@ -226,7 +226,9 @@ export function useTask(id: number | null) {
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const taskRef = useRef(task)
-  taskRef.current = task
+  useLayoutEffect(() => {
+    taskRef.current = task
+  })
 
   const refresh = useCallback(async () => {
     if (id === null) return

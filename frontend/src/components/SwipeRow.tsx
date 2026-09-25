@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { animate, motion, useDragControls, useMotionValue, useTransform, type PanInfo } from 'framer-motion'
 import { CalendarIcon, TrashIcon } from './icons'
 
@@ -42,7 +42,9 @@ export function SwipeRow({ title, onDelete, onToday, children }: Props) {
     if (closeOpened === close) closeOpened = null
   }
   const closeRef = useRef(close)
-  closeRef.current = close
+  useLayoutEffect(() => {
+    closeRef.current = close
+  })
 
   // открытая строка закрывается касанием мимо неё
   useEffect(() => {

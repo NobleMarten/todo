@@ -18,10 +18,14 @@ Config comes from env (`internal/config`): `godotenv` loads `.envlocal`, falling
 ### Frontend (`frontend/`, React 19 + Vite + react-router-dom 7 + framer-motion)
 
 ```bash
-npm run dev      # dev server
-npm run build    # -> frontend/dist
-npm run lint
+npm run dev        # dev server
+npm run build      # tsc -p . (type check) && vite build -> frontend/dist
+npm run typecheck  # tsc only
+npm run lint       # eslint: .js via @eslint/js, .ts/.tsx via typescript-eslint
+npm test           # vitest run (npx vitest run src/lib/quickAdd.test.ts -t 'parseQuickAdd' — single file/test)
 ```
+
+Tests are plain-function unit tests next to the code (`src/**/*.test.ts`, node environment, no jsdom): `lib/date`, `lib/quickAdd`, `lib/format`, `api/client`. `vitest.config.js` pins `TZ=Europe/Berlin` (a DST zone, so local-vs-UTC date bugs show up) and blanks `VITE_API_URL` so `frontend/.env` never leaks into tests.
 
 `VITE_API_URL` in `frontend/.env` points at the backend — set `http://localhost:8080` when developing against a local API. Empty = relative requests (same-origin nginx proxy).
 
@@ -54,7 +58,8 @@ transport (ServeMux patterns)  ->  service (tasks / projects / day)  ->  storage
 
 ## Gotchas
 
-- `frontend/` has **no `tsconfig.json` and no TypeScript installed** — Vite transpiles `.tsx` without type checking, and `eslint.config.js` only matches `**/*.{js,jsx}`, so `npm run lint` does not cover the app source. For a type check run a one-off `npx -p typescript@5 tsc --noEmit --strict --jsx react-jsx --module esnext --moduleResolution bundler --target es2022 --lib es2022,dom,dom.iterable --skipLibCheck src/main.tsx src/vite-env.d.ts`.
+- `frontend/tsconfig.json` is check-only (`noEmit`, strict, `noUnused*`, `verbatimModuleSyntax` — use `import type` for types); Vite/esbuild still transpiles without type info. TypeScript is pinned to `~5.9` because `typescript-eslint` 8 does not support TS 6/7.
+- ESLint runs the React Compiler rules from `eslint-plugin-react-hooks` 7. `react-hooks/set-state-in-effect` is off for `.ts/.tsx` (every data hook loads in an effect by design); "latest ref" values are written in `useLayoutEffect`, not during render; files in `components/` export only components (`useOpenTask` lives in `hooks/`, `hidesTabBar` in `lib/nav.ts`) for fast refresh.
 - `db/init.sql` still creates the pre-redesign `tasks` table for empty volumes; migration `00002` starts with an idempotent base schema so goose also works on a completely empty DB.
 - Rolling back on prod: `goose down-to 0` first (with the new binary), then the old binary — the old one re-adds an empty `daily` column and breaks the Down migration.
 - `POST /tasks/clear` is a `TRUNCATE` of all tasks (active too) and deliberately has no UI.

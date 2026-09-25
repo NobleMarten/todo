@@ -7,7 +7,7 @@ import { PRIORITY_LABEL } from '../lib/format'
 import { NativeDateInput } from './DatePicker'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { SwipeRow } from './SwipeRow'
-import { useOpenTask } from './TaskSheet'
+import { useOpenTask } from '../hooks/useOpenTask'
 import { CalendarIcon, CheckIcon, GripIcon, SpinIcon } from './icons'
 
 interface Props {
