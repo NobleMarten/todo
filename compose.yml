@@ -40,6 +40,10 @@ services:
       ENV: ${ENV:-prod}
       PORT: "8080"
       HTTP_SHUTDOWN_TIMEOUT: ${HTTP_SHUTDOWN_TIMEOUT:-10s}
+      APP_TZ: ${APP_TZ:-Europe/Moscow}
+      # Пароль входа в приложение. Пусто — вход выключен и API открыт всем, кто дотянется
+      # до фронта: на проде задать в .env обязательно (бэкенд пишет WARNING в лог).
+      APP_PASSWORD: ${APP_PASSWORD:-}
       # Хост — имя сервиса `db` из этой же сети, а не localhost.
       DB_URL: postgres://${POSTGRES_USER:-todo_user}:${POSTGRES_PASSWORD:-todo_pass}@db:5432/${POSTGRES_DB:-todo_db}?sslmode=disable
     ports:

@@ -98,93 +98,75 @@ git checkout main && docker compose up -d --build backend frontend   # стар�
 
 # После Этапов 7–11 (вход, бэкапы, CI, «Неделя», повторы, поиск)
 
-Всё ниже — снова твоя зона. Порядок важен: **п. 6 и 7 делаются в один деплой**, иначе приложение
-либо останется открытым, либо не пустит тебя самого.
+## Уже сделано из репозитория (2026-09-25)
 
-## 6. `frontend/nginx.conf` — добавить `auth` в регулярку прокси
+- ✅ **6.** `frontend/nginx.conf`: `auth` в регулярке прокси.
+- ✅ **7 (часть в git).** `compose.yml`: бэкенду передаются `APP_PASSWORD` и `APP_TZ`.
+- ✅ **9.** CI `.github/workflows/ci.yml` — запускается сам на push.
+- ✅ **10 (git).** `redesign/stage-1` смержена в `main` и запушена.
+- ✅ Проверено локально в Docker (те же `Dockerfile`, `compose.yml`, `postgres:17-alpine`): образы собираются, миграции
+  до версии 7, через nginx фронта `/auth/status` → вход включён, `/tasks` без входа → 401, вход → 204, неделя и поиск
+  работают, `ILIKE` по кириллице без учёта регистра → `t`; `scripts/backup.sh` + восстановление из шапки скрипта.
 
-Вход живёт на `/auth/*`. Без этого `POST /auth/login` уходит в SPA-фолбэк, и войти нельзя.
+## Осталось на VPS (нужен доступ по SSH — у Claude его нет)
 
-```nginx
-location ~ ^/(tasks|projects|day|stats|auth)(/|$) {
-```
-
-(«Неделя» и поиск новых префиксов не добавили: они под `/day` и `/tasks`.)
-
-## 7. `compose.yml` + серверный `.env` — пароль
-
-В `services.backend.environment`:
-
-```yaml
-APP_PASSWORD: ${APP_PASSWORD:-}
-```
-
-На VPS в `/root/todo/.env` (он не в git):
+Всё по порядку, одной сессией `ssh root@95.85.252.88`:
 
 ```bash
-echo "APP_PASSWORD=$(openssl rand -base64 18)" >> /root/todo/.env   # или свой пароль
-grep APP_PASSWORD /root/todo/.env                                    # запомнить / в менеджер паролей
-```
+cd /root/todo
 
-Проверка после деплоя:
+# 1) копия базы ДО обновления (scripts/backup.sh появится только после pull — поэтому руками)
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  | gzip > ~/todo-before-stage7-$(date +%F).sql.gz
+gunzip -c ~/todo-before-stage7-*.sql.gz | tail -3        # должно быть «PostgreSQL database dump complete»
 
-```bash
-docker compose logs backend | grep -c "APP_PASSWORD is empty"      # 0 — вход включён
+# 2) пароль входа — в серверный .env (не в git)
+grep -q '^APP_PASSWORD=' .env || echo "APP_PASSWORD=$(openssl rand -base64 18)" >> .env
+grep '^APP_PASSWORD=' .env                                # записать в менеджер паролей
+
+# 3) код и перезапуск
+git pull
+docker compose up -d --build
+docker compose logs backend | grep -E 'goose|WARNING'    # «migrated database to version: 7», WARNING быть не должно
+
+# 4) проверки через фронтовой контейнер (порт 8091 из .env)
+curl -s http://127.0.0.1:8091/auth/status; echo           # {"authed":false,"enabled":true}
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/tasks   # 401
-curl -s http://127.0.0.1:8091/auth/status                             # {"authed":false,"enabled":true}
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select '"'"'ДОКЕР'"'"' ILIKE '"'"'%докер%'"'"'"'
+                                                          # t — поиск по-русски без учёта регистра работает
+
+# 5) бэкапы по cron
+scripts/backup.sh                                         # «backup ok: …/todo-….sql.gz»
+( crontab -l 2>/dev/null; echo '0 4 * * * cd /root/todo && scripts/backup.sh >> /var/log/todo-backup.log 2>&1' ) | crontab -
+crontab -l | grep backup
 ```
 
-Сессия живёт год. Сменить пароль = разлогинить все устройства. **Без HTTPS пароль при входе идёт открытым
-текстом** — от случайных посетителей и ботов защищает, от перехвата в чужом Wi-Fi нет.
+**Важно: это первый деплой редизайна.** На проде сейчас старый `main` (API `/todos`, колонка `daily`), поэтому при
+старте бэкенд прогонит на боевой базе **все** миграции 00001–00007 (списки, `daily` → `scheduled_for`, новые колонки,
+`repeat`). Они обратимые и проверены тестами на копии схемы со старыми данными, но копия из шага 1 обязательна.
 
-## 8. Бэкапы по cron
+Если что-то пошло не так — откат только через копию (старый код поверх мигрированной базы не работает, см. §4):
 
 ```bash
-cd /root/todo && scripts/backup.sh          # первый прогон руками: "backup ok: …/todo-….sql.gz"
-crontab -e
-# 0 4 * * * cd /root/todo && scripts/backup.sh >> /var/log/todo-backup.log 2>&1
+docker compose stop backend
+docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "DROP TABLE IF EXISTS goose_db_version, projects CASCADE;"'
+gunzip -c ~/todo-before-stage7-*.sql.gz | docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+git checkout 0182613 && docker compose up -d --build     # прежний прод
 ```
 
-Копии в `~/todo-backups`, хранятся 14 последних (`KEEP=`/`BACKUP_DIR=` меняют). Восстановление — в шапке скрипта.
-Лучше периодически утаскивать копию с VPS к себе: бэкап на том же диске не спасёт от смерти диска.
+Копию бэкапов время от времени стоит утаскивать к себе (бэкап на том же диске не спасёт от смерти диска):
 
 ```bash
 scp root@95.85.252.88:'~/todo-backups/todo-*.sql.gz' ~/Backups/todo/
 ```
 
-## 9. CI
-
-`.github/workflows/ci.yml` запускается сам на каждый push в GitHub — делать ничего не надо.
-Результат — вкладка Actions. Если красное, сначала смотри шаг `gofmt` и `npm ci`.
-
-## 10. Мерж и деплой
-
-```bash
-# локально
-git checkout main && git merge --ff-only redesign/stage-1 && git push
-# на VPS: сначала копия базы (п. 8 или руками), потом
-cd /root/todo && git pull && docker compose up -d --build
-docker compose logs backend | grep goose     # новые миграции: 00007 (повторы) — см. журнал REDESIGN.md
-```
-
-## 10а. Поиск по-русски без учёта регистра — проверить локаль базы
-
-Поиск (`ILIKE`) складывает регистр по локали базы. Одна команда на VPS:
-
-```bash
-docker compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc "select '"'"'ДОКЕР'"'"' ILIKE '"'"'%докер%'"'"'"'
-```
-
-`t` — всё хорошо. `f` — база в локали `C`, и «докер» не найдёт «Докер»: напиши, переведу поиск на `lower()` с ICU.
-
 ## 11. iPhone — проверить руками
 
-- PWA установлена заново (иначе iOS держит старый `start_url`), вход по паролю один раз, после перезапуска
-  PWA сессия сохраняется.
+- PWA установить заново (иначе iOS держит старый `start_url`), войти паролем один раз; после перезапуска PWA
+  сессия сохраняется.
 - Отступы под чёлкой и home-индикатором на всех экранах, включая «Неделю».
-- Свайп строки не мешает вертикальной прокрутке; перетаскивание задачи на день в полосе недели.
+- Свайп строки не мешает вертикальной прокрутке; перетаскивание задачи на день в полосе недели;
+  чип бэклога тащится на день и не мешает прокрутке.
 - Тост «удалено · вернуть» не перекрывается home-индикатором.
-- Поле ввода не зумит страницу при фокусе.
+- Поле ввода и поиск не зумят страницу при фокусе.
 - Светлая тема: статус-бар читается.
-- «Неделя»: полоса дней прилипает под чёлкой, чип бэклога тащится на день и не мешает прокрутке.
-- Поиск: клавиатура открывается сразу, кнопка «найти» на клавиатуре ничего не ломает.
