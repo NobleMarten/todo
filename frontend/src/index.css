@@ -983,6 +983,7 @@ ul { list-style: none; }
 .card-note:focus { border-color: var(--accent); }
 .card-note::placeholder { color: var(--faint); }
 
+.card-facts { margin: 0; padding: 0 2px; font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--faint); }
 .card-actions { display: flex; gap: 10px; padding-top: 6px; }
 .btn-big { flex: 1; height: 48px; border-radius: 15px; font-size: 15px; font-weight: 600; }
 .btn-big:not(.btn-primary):not(.btn-danger) { background: var(--surface); border-color: var(--border); }

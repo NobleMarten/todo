@@ -6,6 +6,7 @@ import { useProjects } from '../hooks/useProjects'
 import { statsOf, useTask } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
 import { PRIORITIES, PRIORITY_LABEL, TITLE_MAX } from '../lib/format'
+import { taskFacts } from '../lib/stats'
 import { DatePicker } from './DatePicker'
 import { ProjectPicker } from './ProjectPicker'
 import { RepeatField } from './RepeatField'
@@ -194,6 +195,8 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
         <span className="field-label">заметка</span>
         <NoteEditor note={task.note} onSave={(note) => update({ note })} />
       </section>
+
+      <p className="card-facts">{taskFacts(task, today).join(' · ')}</p>
 
       <div className="card-actions">
         {confirmDelete ? (
