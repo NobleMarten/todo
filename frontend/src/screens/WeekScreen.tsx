@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
-import { motion, type PanInfo } from 'framer-motion'
+import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import type { DateStr, Project, Task, Week } from '../api/types'
+import { AnimatedRow } from '../components/AnimatedRow'
 import { DayDrag } from '../components/DayDrag'
 import { DoneRow } from '../components/DoneRow'
 import { ErrorState } from '../components/ErrorState'
@@ -26,6 +27,7 @@ import {
 } from '../lib/date'
 import { plural } from '../lib/format'
 import type { QuickParse } from '../lib/quickAdd'
+import { revealTask } from '../lib/reveal'
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 const MAX_DOTS = 3
@@ -77,7 +79,9 @@ export function WeekScreen() {
     })
     if (!created) return null
     const when = created.scheduled_for
-    return when && when !== selected ? { hint: `добавлено на ${shortDate(when)}` } : {}
+    if (when && when !== selected) return { hint: `добавлено на ${shortDate(when)}` }
+    revealTask(created.id)
+    return {}
   }
 
   const dropOn = (task: Task) => (day: DateStr) => schedule(task, day)
@@ -151,31 +155,34 @@ export function WeekScreen() {
           </div>
 
           {dayData && (
-            <ul className="task-list week-list">
-              {[...dayData.deadlines, ...dayData.scheduled].map((t) => (
-                <li key={`${t.id}-${t.scheduled_for === selected ? 's' : 'd'}`}>
-                  <DayDrag onHover={setDropDay} onDrop={dropOn(t)}>
-                    {(controls) => (
-                      <TaskRow
-                        task={t}
-                        today={today}
-                        project={projectOf(t)}
-                        dragControls={controls}
-                        alert={t.due_date === selected && selected <= today}
-                        onToggle={() => toggle(t)}
-                        onSetDue={(d) => update(t.id, { due_date: d })}
-                        onDelete={() => remove(t.id)}
-                        onToday={() => schedule(t, today)}
-                      />
-                    )}
-                  </DayDrag>
-                </li>
-              ))}
-              {dayData.done.map((t) => (
-                <li key={`${t.id}-done`}>
-                  <DoneRow task={t} project={projectOf(t)} onUndo={() => toggle(t)} />
-                </li>
-              ))}
+            // другой день — другой список: без анимаций ухода старых строк
+            <ul key={selected} className="task-list week-list">
+              <AnimatePresence initial={false}>
+                {[...dayData.deadlines, ...dayData.scheduled].map((t) => (
+                  <AnimatedRow key={`${t.id}-${t.scheduled_for === selected ? 's' : 'd'}`} id={t.id}>
+                    <DayDrag onHover={setDropDay} onDrop={dropOn(t)}>
+                      {(controls) => (
+                        <TaskRow
+                          task={t}
+                          today={today}
+                          project={projectOf(t)}
+                          dragControls={controls}
+                          alert={t.due_date === selected && selected <= today}
+                          onToggle={() => toggle(t)}
+                          onSetDue={(d) => update(t.id, { due_date: d })}
+                          onDelete={() => remove(t.id)}
+                          onToday={() => schedule(t, today)}
+                        />
+                      )}
+                    </DayDrag>
+                  </AnimatedRow>
+                ))}
+                {dayData.done.map((t) => (
+                  <AnimatedRow key={`${t.id}-done`} id={t.id}>
+                    <DoneRow task={t} project={projectOf(t)} onUndo={() => toggle(t)} />
+                  </AnimatedRow>
+                ))}
+              </AnimatePresence>
             </ul>
           )}
           {dayData && dayData.scheduled.length + dayData.deadlines.length + dayData.done.length === 0 && (

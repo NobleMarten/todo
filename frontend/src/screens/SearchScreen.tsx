@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import type { Task } from '../api/types'
+import { AnimatedRow } from '../components/AnimatedRow'
 import { DoneRow } from '../components/DoneRow'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { SkeletonRows } from '../components/Skeleton'
@@ -71,17 +73,19 @@ export function SearchScreen() {
               <section className="task-section">
                 <div className="section-label">активные · {result.active.length}</div>
                 <ul className="task-list">
-                  {result.active.map((t) => (
-                    <li key={t.id}>
-                      <TaskRow
-                        task={t}
-                        today={today}
-                        project={projectOf(t)}
-                        onToggle={() => update(t.id, { done: true })}
-                        onSetDue={(d) => update(t.id, { due_date: d })}
-                      />
-                    </li>
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {result.active.map((t) => (
+                      <AnimatedRow key={t.id} id={t.id}>
+                        <TaskRow
+                          task={t}
+                          today={today}
+                          project={projectOf(t)}
+                          onToggle={() => update(t.id, { done: true })}
+                          onSetDue={(d) => update(t.id, { due_date: d })}
+                        />
+                      </AnimatedRow>
+                    ))}
+                  </AnimatePresence>
                 </ul>
               </section>
             )}

@@ -15,6 +15,7 @@ import { useProjects } from '../hooks/useProjects'
 import { matchesSpec, reorderScopeOf, useTasks, useWeekProgress, type ListSpec } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
 import type { QuickParse } from '../lib/quickAdd'
+import { revealTask } from '../lib/reveal'
 import { groupTasks, PROJECT_NAME_MAX, sectionsFor, type Grouping } from '../lib/format'
 
 // подсказка синтаксиса быстрого ввода в пустом списке
@@ -81,7 +82,9 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       repeat: p.repeat,
     })
     if (!created) return null
-    return matchesSpec(created, spec, today) ? {} : { hint: `добавлено в «${target?.name ?? 'входящие'}»` }
+    if (!matchesSpec(created, spec, today)) return { hint: `добавлено в «${target?.name ?? 'входящие'}»` }
+    revealTask(created.id)
+    return {}
   }
 
   const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
@@ -161,9 +164,10 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
               <div className={`section-label tone-${key}`}>
                 {label} · {list.length}
               </div>
-              {runsOf(list, grouping).map((run) => (
+              {runsOf(list, grouping).map((run, i) => (
                 <TaskRun
-                  key={run[0].id}
+                  // по номеру, а не по первой задаче: ушла первая — отрезок не пересоздаётся и анимирует уход
+                  key={i}
                   run={run}
                   today={today}
                   draggable={draggable}

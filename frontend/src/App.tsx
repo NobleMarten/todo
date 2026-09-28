@@ -5,6 +5,7 @@ import { TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
 import { UndoToast } from './components/UndoToast'
 import { useAuth } from './hooks/useAuth'
+import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { hidesTabBar } from './lib/nav'
 import { ArchiveScreen } from './screens/ArchiveScreen'
@@ -37,6 +38,7 @@ export default function App() {
   const background = (location.state as { background?: Location } | null)?.background
   const base = taskMatch ? (background ?? '/today') : location
   const basePath = typeof base === 'string' ? base : base.pathname
+  useScrollRestoration(typeof base === 'string' ? base : base.key, basePath)
   const taskId = taskMatch && /^\d+$/.test(taskMatch.params.id ?? '') ? Number(taskMatch.params.id) : null
 
   const closeSheet = () => {

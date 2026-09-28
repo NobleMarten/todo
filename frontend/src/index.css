@@ -465,6 +465,14 @@ ul { list-style: none; }
 .screen-header + .task-section,
 .screen-header + .empty { margin-top: 14px; }
 .task-list { display: flex; flex-direction: column; gap: 8px; }
+/* докрутка к новой строке (lib/reveal): снизу место под пристыкованным полем быстрого ввода */
+.task-list > li { scroll-margin: 16px 0 calc(150px + env(safe-area-inset-bottom)); }
+/* только что добавленная строка коротко подсвечивается */
+.just-added .task { animation: row-flash 1.2s ease-out; }
+@keyframes row-flash {
+  0%, 30% { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); border-color: var(--accent); }
+  100% { background: var(--surface); border-color: var(--border); }
+}
 .reorder-item { position: relative; list-style: none; }
 
 /* ── свайпы строки: влево — «удалить», вправо — «на сегодня» ──────────────────── */
