@@ -7,6 +7,10 @@
 html { touch-action: manipulation; }
 /* в PWA страница не тянется резинкой: шапка и таб-бар не «плавают» */
 html, body { overscroll-behavior: none; }
+/* баг WebKit в PWA со статус-баром black-translucent: на старте окно короче экрана на высоту статус-бара,
+   и всё, что прибито к низу (таб-бар), висит над краем с щелью. С верхним инсетом высота становится полной;
+   в обычном Safari инсет 0 и ничего не меняется */
+html { min-height: calc(100% + env(safe-area-inset-top)); background: var(--bg); }
 
 body {
   background: var(--bg);
@@ -362,9 +366,20 @@ ul { list-style: none; }
   z-index: 20;
   display: flex;
   justify-content: space-around;
-  padding: 6px 14px calc(12px + env(safe-area-inset-bottom));
+  /* как у нативного таб-бара: подписи сразу над полосой home-индикатора, без лишнего зазора */
+  padding: 6px 14px max(10px, calc(env(safe-area-inset-bottom) - 6px));
   background: var(--surface-2);
   border-top: 1px solid var(--border);
+}
+/* фон бара продолжается за нижний край: если окно всё же короче экрана (старт PWA, резинка), щели не видно */
+.tabbar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 120px;
+  background: var(--surface-2);
 }
 .tab {
   min-width: 64px;
