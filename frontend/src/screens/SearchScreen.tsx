@@ -20,6 +20,9 @@ export function SearchScreen() {
   const [params, setParams] = useSearchParams()
   const [text, setText] = useState(params.get('q') ?? '')
   const { q, result, loading, error, update } = useSearch(text)
+  // одни функции на все строки (TaskRow — memo)
+  const complete = (t: Task) => update(t.id, { done: true })
+  const setDue = (t: Task, d: string | null) => update(t.id, { due_date: d })
   const { all: projects } = useProjects()
   const projectById = new Map(projects.map((p) => [p.id, p]))
   const projectOf = (t: Task) => (t.project_id !== null ? projectById.get(t.project_id) : undefined)
@@ -80,8 +83,8 @@ export function SearchScreen() {
                           task={t}
                           today={today}
                           project={projectOf(t)}
-                          onToggle={() => update(t.id, { done: true })}
-                          onSetDue={(d) => update(t.id, { due_date: d })}
+                          onToggle={complete}
+                          onSetDue={setDue}
                         />
                       </AnimatedRow>
                     ))}

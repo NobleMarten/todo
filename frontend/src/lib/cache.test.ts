@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Task } from '../api/types'
-import { createCache, replaceTask, staleKeys } from './cache'
+import { createCache, replaceTask, shareEqual, staleKeys } from './cache'
 import { forgetCache, persistable, persistCache, restoreCache, type StorageLike } from './cachePersist'
 
 function task(id: number, over: Partial<Task> = {}): Task {
@@ -115,6 +115,42 @@ describe('createCache', () => {
     expect(c.get<Task[]>('tasks:all')?.[1].title).toBe('новый')
     expect(onAll).toHaveBeenCalledTimes(1)
     expect(onOne).not.toHaveBeenCalled()
+  })
+})
+
+describe('shareEqual', () => {
+  it('равный ответ — прежний объект целиком', () => {
+    const prev = { date: 'x', planned: [task(1), task(2)] }
+    const next = JSON.parse(JSON.stringify(prev))
+    expect(shareEqual(prev, next)).toBe(prev)
+  })
+
+  it('изменённая задача — новая, остальные — прежние ссылки, даже если сдвинулись', () => {
+    const prev = [task(1), task(2), task(3)]
+    const next = [task(9), task(1), task(2, { title: 'правка' }), task(3)]
+    const out = shareEqual(prev, next)
+    expect(out).not.toBe(prev)
+    expect(out[1]).toBe(prev[0])
+    expect(out[2]).not.toBe(prev[1])
+    expect(out[2].title).toBe('правка')
+    expect(out[3]).toBe(prev[2])
+  })
+
+  it('убранное поле и укороченный массив — изменение', () => {
+    expect(shareEqual({ a: 1, b: 2 }, { a: 1 })).toEqual({ a: 1 })
+    const prev = [1, 2]
+    expect(shareEqual(prev, [1])).toEqual([1])
+  })
+
+  it('перечитывание без изменений не оповещает подписчиков', async () => {
+    const c = createCache()
+    await c.fetch('a', async () => [task(1)])
+    const fn = vi.fn()
+    c.subscribe('a', fn)
+    await c.fetch('a', async () => [task(1)])
+    expect(fn).not.toHaveBeenCalled()
+    await c.fetch('a', async () => [task(1, { done: true })])
+    expect(fn).toHaveBeenCalledTimes(1)
   })
 })
 

@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useLayoutEffect } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
 import { TabBar } from './components/TabBar'
@@ -8,6 +8,7 @@ import { useAuth } from './hooks/useAuth'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { hidesTabBar } from './lib/nav'
+import { bindNavigator } from './lib/opener'
 import { ArchiveScreen } from './screens/ArchiveScreen'
 import { ListsScreen } from './screens/ListsScreen'
 import { LoginScreen } from './screens/LoginScreen'
@@ -34,6 +35,8 @@ export default function App() {
   const location = useLocation()
   const navigate = useNavigate()
   const taskMatch = useMatch('/task/:id')
+  // строки открывают карточку через lib/opener, не подписываясь на адрес сами
+  useLayoutEffect(() => bindNavigator(navigate, location), [navigate, location])
 
   const background = (location.state as { background?: Location } | null)?.background
   const base = taskMatch ? (background ?? '/today') : location

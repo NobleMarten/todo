@@ -40,10 +40,10 @@ export function TaskRun({
     task: t,
     today,
     project: t.project_id !== null ? projectById?.get(t.project_id) : undefined,
-    onToggle: () => onToggle(t),
-    onSetDue: (d: DateStr | null) => onSetDue(t, d),
-    onDelete: onDelete && (() => onDelete(t)),
-    onToday: onToday && (() => onToday(t)),
+    onToggle,
+    onSetDue,
+    onDelete,
+    onToday,
   })
 
   if (!draggable || run.length < 2) {

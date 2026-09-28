@@ -85,6 +85,10 @@ export function WeekScreen() {
   }
 
   const dropOn = (task: Task) => (day: DateStr) => schedule(task, day)
+  // одни функции на все строки (TaskRow — memo)
+  const setDue = (t: Task, d: DateStr | null) => update(t.id, { due_date: d })
+  const removeTask = (t: Task) => remove(t.id)
+  const toToday = (t: Task) => schedule(t, today)
 
   return (
     <div className="screen week-screen">
@@ -168,10 +172,10 @@ export function WeekScreen() {
                           project={projectOf(t)}
                           dragControls={controls}
                           alert={t.due_date === selected && selected <= today}
-                          onToggle={() => toggle(t)}
-                          onSetDue={(d) => update(t.id, { due_date: d })}
-                          onDelete={() => remove(t.id)}
-                          onToday={() => schedule(t, today)}
+                          onToggle={toggle}
+                          onSetDue={setDue}
+                          onDelete={removeTask}
+                          onToday={toToday}
                         />
                       )}
                     </DayDrag>

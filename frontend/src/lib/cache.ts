@@ -60,6 +60,44 @@ export function replaceTask<T>(value: T, saved: Task): T {
   return (changed ? out : value) as T
 }
 
+function isPlain(v: unknown): v is Record<string, unknown> {
+  return v !== null && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype
+}
+
+/**
+ * Ответ сервера с переиспользованием того, что не изменилось (structural sharing): равные по значению
+ * объекты и массивы остаются прежними ссылками. Строки списков — memo, и фоновое перечитывание
+ * перерисовывает только изменённые задачи; если не изменилось ничего, возвращается prev целиком.
+ * Элементы массивов с id сопоставляются по id (задачу вставили выше — остальные всё равно узнаются).
+ */
+export function shareEqual<T>(prev: unknown, next: T): T {
+  if (Object.is(prev, next)) return prev as T
+  if (Array.isArray(prev) && Array.isArray(next)) {
+    const byId = new Map<unknown, unknown>()
+    for (const p of prev) if (isPlain(p) && 'id' in p) byId.set(p.id, p)
+    let same = prev.length === next.length
+    const out = next.map((v, i) => {
+      const old = isPlain(v) && 'id' in v && byId.has(v.id) ? byId.get(v.id) : prev[i]
+      const n = shareEqual(old, v)
+      if (n !== prev[i]) same = false
+      return n
+    })
+    return (same ? prev : out) as T
+  }
+  if (isPlain(prev) && isPlain(next)) {
+    const keys = Object.keys(next)
+    let same = keys.length === Object.keys(prev).length
+    const out: Record<string, unknown> = {}
+    for (const k of keys) {
+      const n = shareEqual(prev[k], next[k])
+      out[k] = n
+      if (n !== prev[k] || !(k in prev)) same = false
+    }
+    return (same ? prev : out) as T
+  }
+  return next
+}
+
 export function createCache(now: () => number = Date.now) {
   const entries = new Map<string, Entry>()
   const listeners = new Map<string, Set<() => void>>()
@@ -122,11 +160,13 @@ export function createCache(now: () => number = Date.now) {
       const promise = fetcher()
         .then((data) => {
           if (e.writes === writes) {
-            e.data = data
+            const shared = e.has ? shareEqual(e.data, data) : data
+            const changed = !e.has || shared !== e.data
+            e.data = shared
             e.has = true
             e.at = now()
             e.stale = false
-            emit(key)
+            if (changed) emit(key)
           }
           return data
         })

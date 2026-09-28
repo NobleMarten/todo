@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import type { DragControls } from 'framer-motion'
 import type { DateStr, Project, Task } from '../api/types'
 import { useTask } from '../hooks/useTasks'
@@ -18,17 +18,19 @@ interface Props {
   dragControls?: DragControls // нет — строку не перетаскивают
   gripSpace?: boolean // место под ручку без неё: строки одного списка выровнены по правому краю
   alert?: boolean // красная рамка и без дедлайна: блок «просрочено» на «Сегодня» (вчера не доделал)
-  onToggle: () => void
-  onSetDue: (d: DateStr | null) => void
-  onDelete?: () => void // свайп влево
-  onToday?: () => void // свайп вправо; у задачи, уже стоящей на сегодня, не предлагается
+  // колбэки получают задачу: экран передаёт одни и те же функции всем строкам, и memo строки срабатывает
+  onToggle: (t: Task) => void
+  onSetDue: (t: Task, d: DateStr | null) => void
+  onDelete?: (t: Task) => void // свайп влево
+  onToday?: (t: Task) => void // свайп вправо; у задачи, уже стоящей на сегодня, не предлагается
 }
 
 /**
  * Строка задачи (макет B2): круглый чекбокс цвета приоритета, заголовок, справа бейджи —
  * прогресс подзадач (раскрывает их) и дата. Без дат — кнопка «назначить дедлайн».
+ * memo: при правке одной задачи или открытии карточки остальные строки не перерисовываются.
  */
-export function TaskRow({
+export const TaskRow = memo(function TaskRow({
   task,
   today,
   project,
@@ -64,7 +66,7 @@ export function TaskRow({
     dateBadge = (
       <label className="date-assign">
         <CalendarIcon />
-        <NativeDateInput value={null} label={`назначить дедлайн: ${task.title}`} onChange={onSetDue} />
+        <NativeDateInput value={null} label={`назначить дедлайн: ${task.title}`} onChange={(d) => onSetDue(task, d)} />
       </label>
     )
   }
@@ -74,7 +76,7 @@ export function TaskRow({
       <div className="task-row">
         <button
           className="check-hit"
-          onClick={onToggle}
+          onClick={() => onToggle(task)}
           aria-label={`${task.done ? 'вернуть' : 'выполнить'}: ${task.title}`}
           aria-pressed={task.done}
           title={PRIORITY_LABEL[task.priority]}
@@ -128,13 +130,13 @@ export function TaskRow({
   return (
     <SwipeRow
       title={task.title}
-      onDelete={onDelete}
-      onToday={onToday && task.scheduled_for !== today && !task.done ? onToday : undefined}
+      onDelete={onDelete && (() => onDelete(task))}
+      onToday={onToday && task.scheduled_for !== today && !task.done ? () => onToday(task) : undefined}
     >
       {row}
     </SwipeRow>
   )
-}
+})
 
 /**
  * Ручка перетаскивания. Слушатель нативный: строка внутри SwipeRow сама слушает pointerdown

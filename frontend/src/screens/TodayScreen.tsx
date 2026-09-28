@@ -39,6 +39,10 @@ export function TodayScreen() {
 
   const projectById = new Map(projects.map((p) => [p.id, p]))
   const projectOf = (t: Task) => (t.project_id !== null ? projectById.get(t.project_id) : undefined)
+  // одни функции на все строки (TaskRow — memo)
+  const setDue = (t: Task, d: string | null) => update(t.id, { due_date: d })
+  const removeTask = (t: Task) => remove(t.id)
+  const toToday = (t: Task) => moveToToday([t.id])
 
   if (!day) {
     return (
@@ -114,10 +118,10 @@ export function TodayScreen() {
                     today={today}
                     project={projectOf(t)}
                     alert
-                    onToggle={() => toggle(t)}
-                    onSetDue={(d) => update(t.id, { due_date: d })}
-                    onDelete={() => remove(t.id)}
-                    onToday={() => moveToToday([t.id])}
+                    onToggle={toggle}
+                    onSetDue={setDue}
+                    onDelete={removeTask}
+                    onToday={toToday}
                   />
                 </AnimatedRow>
               ))}
@@ -144,9 +148,9 @@ export function TodayScreen() {
               draggable
               projectById={projectById}
               onToggle={toggle}
-              onSetDue={(t, d) => update(t.id, { due_date: d })}
+              onSetDue={setDue}
               onReorder={(ids) => reorderPlanned([focus.id, ...ids])}
-              onDelete={(t) => remove(t.id)}
+              onDelete={removeTask}
             />
           )}
           <Link to="/plan" className="new-project plan-more">
