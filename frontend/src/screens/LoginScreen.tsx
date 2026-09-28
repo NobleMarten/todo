@@ -4,22 +4,26 @@ import { Logo } from '../components/ScreenHeader'
 import { SpinIcon } from '../components/icons'
 
 interface Props {
-  onLogin: (password: string) => Promise<void>
+  onLogin: (login: string, password: string) => Promise<void>
 }
 
-/** Экран входа: одно поле пароля. Сессия живёт год, смена APP_PASSWORD разлогинивает все устройства. */
+/**
+ * Экран входа: логин и пароль. Регистрации нет — пользователей заводит `todo-api user add`.
+ * Сессия живёт год и продлевается, пока приложением пользуются.
+ */
 export function LoginScreen({ onLogin }: Props) {
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (!password || busy) return
+    if (!login.trim() || !password || busy) return
     setBusy(true)
     setError(null)
     try {
-      await onLogin(password)
+      await onLogin(login, password)
     } catch (err) {
       setError(errorText(err, 'не удалось войти'))
       setBusy(false)
@@ -34,13 +38,26 @@ export function LoginScreen({ onLogin }: Props) {
       <form className="login-form" onSubmit={submit}>
         <h1 className="screen-title">Вход</h1>
         <input
+          type="text"
+          name="username"
+          autoComplete="username"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder="логин"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+          autoFocus
+          aria-label="логин"
+          aria-invalid={error !== null}
+        />
+        <input
           type="password"
           name="password"
           autoComplete="current-password"
           placeholder="пароль"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          autoFocus
           aria-label="пароль"
           aria-invalid={error !== null}
         />
@@ -49,7 +66,7 @@ export function LoginScreen({ onLogin }: Props) {
             {error}
           </span>
         )}
-        <button className="btn btn-primary btn-big" type="submit" disabled={!password || busy}>
+        <button className="btn btn-primary btn-big" type="submit" disabled={!login.trim() || !password || busy}>
           {busy ? <SpinIcon /> : 'войти'}
         </button>
       </form>

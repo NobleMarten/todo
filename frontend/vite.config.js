@@ -23,8 +23,15 @@ function preloadFonts() {
   }
 }
 
+// В разработке API — через прокси Vite, с того же адреса, что и фронт: сессия — HttpOnly-cookie,
+// и на чужой адрес (VITE_API_URL=http://localhost:8080) браузер её не отправит. VITE_API_URL для dev — пустой.
+// Те же префиксы проксирует nginx в проде (nginx.conf).
+const API_PREFIXES = ['/tasks', '/projects', '/day', '/stats', '/auth']
+const apiTarget = process.env.API_PROXY ?? 'http://localhost:8080'
+
 // https://vite.dev/config/
 export default defineConfig({
+  server: { proxy: Object.fromEntries(API_PREFIXES.map((p) => [p, apiTarget])) },
   plugins: [
     react({
       // React Compiler мемоизирует компоненты и колбэки сам: открытие шита (смена адреса) не перерисовывает

@@ -86,7 +86,7 @@ const MESSAGES: Record<string, string> = {
   ALREADY_UNDONE: 'задача уже в работе',
   NOTHING_TO_UPDATE: 'нечего сохранять',
   UNAUTHORIZED: 'нужно войти',
-  WRONG_PASSWORD: 'неверный пароль',
+  WRONG_PASSWORD: 'неверный логин или пароль',
 }
 
 /** Текст ошибки для показа пользователю: по коду API, иначе по статусу, иначе fallback. */

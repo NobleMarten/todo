@@ -101,7 +101,7 @@ export default function App() {
             <Route path="/search" element={<SearchScreen />} />
             <Route path="/lists" element={<ListsScreen theme={theme} onToggleTheme={toggle} />} />
             <Route path="/lists/:id" element={<ProjectScreen />} />
-            <Route path="/archive" element={<ArchiveScreen onLogout={auth.enabled ? auth.logout : undefined} />} />
+            <Route path="/archive" element={<ArchiveScreen user={auth.user} onLogout={auth.logout} />} />
             <Route path="*" element={<Navigate to="/today" replace />} />
           </Routes>
         </Suspense>

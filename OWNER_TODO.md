@@ -170,3 +170,42 @@ scp root@95.85.252.88:'~/todo-backups/todo-*.sql.gz' ~/Backups/todo/
 - Тост «удалено · вернуть» не перекрывается home-индикатором.
 - Поле ввода и поиск не зумят страницу при фокусе.
 - Светлая тема: статус-бар читается.
+
+---
+
+# Пользователи (ветка `feat/users`, миграция 00008)
+
+У каждого свои задачи и списки, вход по логину и паролю. `APP_PASSWORD` больше не нужен (если он остался
+в серверном `.env`, он просто игнорируется — можно удалить строку).
+
+Миграция 00008 отдаёт **все существующие задачи и списки** пользователю `noblemarten` **без пароля** —
+до шага 3 войти нельзя никому. Если прод ещё на коде до редизайна (см. выше), при этом деплое
+накатятся сразу миграции 00001–00008: шаги 1–3 из раздела выше, кроме `APP_PASSWORD`, плюс эти.
+
+```bash
+cd /root/todo
+
+# 1) копия базы ДО обновления
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" --clean --if-exists' \
+  | gzip > ~/todo-before-users-$(date +%F).sql.gz
+
+# 2) код и перезапуск
+git pull
+docker compose up -d --build
+docker compose logs backend | grep goose                  # «successfully migrated database to version: 8»
+
+# 3) пароль себе и учётка девушке (пароль спросит дважды, без эха)
+docker compose exec backend todo-api user passwd noblemarten
+docker compose exec backend todo-api user add <её-логин>
+docker compose exec backend todo-api user list            # у обоих не должно быть «пароль не задан»
+
+# 4) проверки через фронтовой контейнер (порт 8091 из .env)
+curl -s http://127.0.0.1:8091/auth/status; echo           # {"authed":false}
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8091/tasks   # 401
+```
+
+Логин: 3–32 символа `a-z 0-9 . _ -` (регистр не важен), пароль — от 8 символов.
+Смена пароля (`user passwd`) закрывает все сессии пользователя — так же «выйти на всех устройствах».
+
+Откат: вернуть прежний код и восстановить копию из шага 1 (старый код не знает про `user_id`;
+Down миграции 00008 есть, но в контейнере нет goose, поэтому копия проще).

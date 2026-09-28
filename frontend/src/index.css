@@ -1315,7 +1315,10 @@ ul { list-style: none; }
 .login-form input::placeholder { color: var(--faint); }
 .login-error { font-size: 13px; color: var(--danger); }
 .login-form .btn-big { flex: none; }
-.logout-btn { display: block; margin: 32px auto 0; }
+/* внизу «Итогов»: кто вошёл и «выйти» */
+.account { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 32px; }
+.account-login { font-size: 13px; color: var(--muted); }
+.account-login b { font-weight: 500; color: var(--text-dim); }
 
 /* ── свайп «назад» от края (hooks/useEdgeBack) ──────────────────────────────── */
 /* выезжает за пальцем; когда отпускание уже вернёт назад — закрашивается акцентом */
