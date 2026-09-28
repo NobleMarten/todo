@@ -19,6 +19,7 @@ function task(id: number, over: Partial<Task> = {}): Task {
     created_at: '',
     done_at: null,
     updated_at: '',
+    postponed: 0,
     ...over,
   }
 }

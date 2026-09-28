@@ -20,6 +20,7 @@ export type Task = {
   created_at: string
   done_at: string | null
   updated_at: string
+  postponed: number // сколько раз due_date/scheduled_for сдвигали позже
   subtasks?: Task[] // только в GET /tasks/{id}
   subtask_stats?: Stats // только у корневых задач в списках
 }

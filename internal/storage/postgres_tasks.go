@@ -24,7 +24,7 @@ func NewPostgresRepo(db *sql.DB) *PostgresRepo {
 
 // taskColumns — порядок колонок, который ожидает scanTask. Все запросы задач идут с алиасом t.
 const taskColumns = "t.id, t.title, t.done, t.priority, t.project_id, t.parent_id, t.due_date, t.scheduled_for, " +
-	"t.position, t.note, t.created_at, t.done_at, t.updated_at, t.repeat, t.user_id"
+	"t.position, t.note, t.created_at, t.done_at, t.updated_at, t.repeat, t.user_id, t.postponed"
 
 // statsJoin добавляет к строке задачи прогресс её подзадач (по индексу tasks(parent_id)).
 const statsJoin = ` LEFT JOIN LATERAL (
@@ -46,7 +46,7 @@ func scanTask(row rowScanner, extra ...any) (model.Task, error) {
 	var task model.Task
 	dest := []any{&task.ID, &task.Title, &task.Done, &task.Priority, &task.ProjectID, &task.ParentID,
 		&task.DueDate, &task.ScheduledFor, &task.Position, &task.Note, &task.CreatedAt, &task.DoneAt, &task.UpdatedAt, &task.Repeat,
-		&task.UserID}
+		&task.UserID, &task.Postponed}
 	err := row.Scan(append(dest, extra...)...)
 	return task, err
 }
@@ -186,13 +186,21 @@ func (pr *PostgresRepo) PatchTask(ctx context.Context, userID, id int, p TaskPat
 		sets = append(sets, "parent_id = @parent_id")
 		args["parent_id"] = p.ParentID.Value
 	}
+	// перенос — сдвиг уже стоявшей даты на более позднюю; снятие и первая постановка даты не считаются.
+	// В SET справа старые значения колонок, сравнение с NULL даёт NULL и уходит в ELSE.
+	var later []string
 	if p.DueDate.Set {
 		sets = append(sets, "due_date = @due_date")
 		args["due_date"] = dateArg(p.DueDate.Value)
+		later = append(later, "due_date < @due_date::date")
 	}
 	if p.ScheduledFor.Set {
 		sets = append(sets, "scheduled_for = @scheduled_for")
 		args["scheduled_for"] = dateArg(p.ScheduledFor.Value)
+		later = append(later, "scheduled_for < @scheduled_for::date")
+	}
+	if len(later) > 0 {
+		sets = append(sets, "postponed = postponed + CASE WHEN "+strings.Join(later, " OR ")+" THEN 1 ELSE 0 END")
 	}
 	if p.Note.Set {
 		sets = append(sets, "note = @note")
@@ -267,7 +275,8 @@ func (pr *PostgresRepo) PlanDay(ctx context.Context, userID int, date model.Date
 	defer func() { _ = tx.Rollback() }()
 
 	args := pgx.NamedArgs{"date": date, "add": add, "remove": remove, "user_id": userID}
-	if _, err := tx.ExecContext(ctx, `UPDATE tasks SET scheduled_for = @date, updated_at = now()
+	if _, err := tx.ExecContext(ctx, `UPDATE tasks SET scheduled_for = @date, updated_at = now(),
+			postponed = postponed + CASE WHEN scheduled_for < @date THEN 1 ELSE 0 END
 		WHERE id = ANY(@add::int[]) AND user_id = @user_id AND NOT done AND parent_id IS NULL`, args); err != nil {
 		return err
 	}

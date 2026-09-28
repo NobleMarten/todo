@@ -381,6 +381,51 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 	})
 
+	t.Run("postponed counter", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		task := mustCreate(t, r, NewTask{Title: "x"})
+		date := func(d model.Date) model.Opt[model.Date] { return model.Opt[model.Date]{Set: true, Value: &d} }
+		clear := model.Opt[model.Date]{Set: true}
+
+		steps := []struct {
+			name  string
+			patch TaskPatch
+			want  int
+		}{
+			{"первая дата — не перенос", TaskPatch{DueDate: date(d0), ScheduledFor: date(d0)}, 0},
+			{"раньше — не перенос", TaskPatch{ScheduledFor: date(d0.AddDays(-1))}, 0},
+			{"та же дата", TaskPatch{DueDate: date(d0)}, 0},
+			{"позже", TaskPatch{ScheduledFor: date(d0.AddDays(2))}, 1},
+			{"обе позже — один перенос", TaskPatch{DueDate: date(d0.AddDays(5)), ScheduledFor: date(d0.AddDays(5))}, 2},
+			{"снятие — не перенос", TaskPatch{DueDate: clear, ScheduledFor: clear}, 2},
+			{"без дат в патче", TaskPatch{Title: ptr("y")}, 2},
+		}
+		for _, s := range steps {
+			got, err := r.PatchTask(ctx, u1, task.ID, s.patch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Postponed != s.want {
+				t.Fatalf("%s: postponed = %d, want %d", s.name, got.Postponed, s.want)
+			}
+		}
+
+		// сборка дня: перенос, только если день уже стоял раньше
+		if _, err := r.PatchTask(ctx, u1, task.ID, TaskPatch{ScheduledFor: date(d0)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.PlanDay(ctx, u1, d0.AddDays(1), []int{task.ID}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.PlanDay(ctx, u1, d0.AddDays(1), []int{task.ID}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := r.GetTask(ctx, u1, task.ID); got.Postponed != 3 {
+			t.Fatalf("после PlanDay postponed = %d, want 3", got.Postponed)
+		}
+	})
+
 	t.Run("search", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()

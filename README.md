@@ -54,6 +54,7 @@ cd frontend && npm install && npm run dev
   "position": 7, "note": null,
   "repeat": "weekly:1,4",        // повтор: daily | weekdays | weekly:1,4 (1 = пн) | monthly:15; null — нет
   "created_at": "…", "done_at": null, "updated_at": "…",
+  "postponed": 2,                // сколько раз due_date/scheduled_for сдвигали позже (PATCH, сборка дня)
   "subtask_stats": {"done": 1, "total": 3}   // в выдачах списков
 }
 // Project

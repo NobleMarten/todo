@@ -209,6 +209,10 @@ func (fr *FakeRepo) PatchTask(_ context.Context, userID, id int, p TaskPatch) (m
 	if p.ParentID.Set {
 		t.ParentID = clonePtr(p.ParentID.Value)
 	}
+	if (p.DueDate.Set && movedLater(t.DueDate, p.DueDate.Value)) ||
+		(p.ScheduledFor.Set && movedLater(t.ScheduledFor, p.ScheduledFor.Value)) {
+		t.Postponed++
+	}
 	if p.DueDate.Set {
 		t.DueDate = clonePtr(p.DueDate.Value)
 	}
@@ -257,6 +261,9 @@ func (fr *FakeRepo) PlanDay(_ context.Context, userID int, date model.Date, add,
 	now := fr.now()
 	for _, id := range add {
 		if i := fr.taskIndex(userID, id); i >= 0 && !fr.Tasks[i].Done && fr.Tasks[i].ParentID == nil {
+			if movedLater(fr.Tasks[i].ScheduledFor, &date) {
+				fr.Tasks[i].Postponed++
+			}
 			fr.Tasks[i].ScheduledFor = &date
 			fr.Tasks[i].UpdatedAt = now
 		}
@@ -603,6 +610,11 @@ func inRange(d *model.Date, r DateRange) bool {
 
 func inTimeRange(t *time.Time, r TimeRange) bool {
 	return t != nil && !t.Before(r.From) && t.Before(r.To)
+}
+
+// movedLater — перенос: дата стояла и сдвигается на более позднюю (как «old < new» в SQL, где NULL — не перенос).
+func movedLater(old, next *model.Date) bool {
+	return old != nil && next != nil && old.Before(*next)
 }
 
 func eqPtr[T comparable](p *T, v T) bool { return p != nil && *p == v }
