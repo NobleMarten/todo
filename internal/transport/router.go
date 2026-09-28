@@ -12,6 +12,7 @@ type TaskService interface {
 	Add(ctx context.Context, nt storage.NewTask) (model.Task, error)
 	Get(ctx context.Context, id int) (model.Task, error)
 	List(ctx context.Context, q service.ListQuery) ([]model.Task, int, error)
+	Counts(ctx context.Context, today *model.Date) (map[string]int, error)
 	Patch(ctx context.Context, id int, p storage.TaskPatch) (model.Task, error)
 	Delete(ctx context.Context, id int) error
 	Reorder(ctx context.Context, scope service.ReorderScope, ids []int) error
@@ -56,6 +57,7 @@ func NewRouter(h *Handler) *http.ServeMux {
 	mux.HandleFunc("POST /projects/reorder", h.ReorderProjects)
 
 	mux.HandleFunc("GET /tasks", h.ListTasks)
+	mux.HandleFunc("GET /tasks/counts", h.TaskCounts) // литерал важнее {id} в ServeMux
 	mux.HandleFunc("GET /tasks/{id}", h.GetTask)
 	mux.HandleFunc("POST /tasks", h.CreateTask)
 	mux.HandleFunc("PATCH /tasks/{id}", h.PatchTask)

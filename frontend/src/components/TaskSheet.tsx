@@ -10,7 +10,7 @@ import { DatePicker } from './DatePicker'
 import { ProjectPicker } from './ProjectPicker'
 import { RepeatField } from './RepeatField'
 import { Sheet } from './Sheet'
-import { SubtaskAdder, SubtaskList } from './SubtaskRow'
+import { SubtaskAdder, SubtaskList, SubtaskPlaceholder } from './SubtaskRow'
 import { BackIcon, CheckIcon, CloseIcon, SpinIcon, TrashIcon } from './icons'
 
 interface Props {
@@ -73,8 +73,10 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
   const today = todayStr()
   const isSubtask = task.parent_id !== null
   const project = projects.find((p) => p.id === task.project_id)
+  // карточка открыта из строки списка: подзадачи ещё в пути, счётчик уже известен из строки
+  const subtasksLoaded = task.subtasks !== undefined
   const subtasks = task.subtasks ?? []
-  const stats = statsOf(subtasks)
+  const stats = subtasksLoaded ? statsOf(subtasks) : (task.subtask_stats ?? { done: 0, total: 0 })
   const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
 
   return (
@@ -175,11 +177,15 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
               <span className="progress-fill" style={{ width: `${(stats.done / stats.total) * 100}%` }} />
             </span>
           )}
-          <SubtaskList
-            subtasks={subtasks}
-            onToggle={(s) => updateSubtask(s.id, { done: !s.done })}
-            onOpen={(s) => openTask(s.id)}
-          />
+          {subtasksLoaded ? (
+            <SubtaskList
+              subtasks={subtasks}
+              onToggle={(s) => updateSubtask(s.id, { done: !s.done })}
+              onOpen={(s) => openTask(s.id, s)}
+            />
+          ) : (
+            <SubtaskPlaceholder count={stats.total} />
+          )}
           <SubtaskAdder label="добавить подзадачу" variant="link" onAdd={addSubtask} />
         </section>
       )}
@@ -197,7 +203,7 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
             </button>
             <button className="btn btn-big btn-danger" onClick={remove}>
               <TrashIcon />
-              {subtasks.length ? 'удалить с подзадачами' : 'удалить'}
+              {stats.total ? 'удалить с подзадачами' : 'удалить'}
             </button>
           </>
         ) : (

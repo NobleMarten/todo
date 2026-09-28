@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAuthStatus, login as apiLogin, logout as apiLogout } from '../api/auth'
 import { onUnauthorized } from '../api/client'
+import { cache } from '../lib/cache'
+import { forgetCache } from '../lib/cachePersist'
 
 export type AuthState = 'checking' | 'in' | 'out'
 
@@ -37,6 +39,12 @@ export function useAuth() {
 
   const logout = useCallback(async () => {
     await apiLogout().catch(() => {})
+    // задачи не должны пережить выход ни в памяти, ни в хранилище
+    try {
+      forgetCache(cache, window.localStorage)
+    } catch {
+      forgetCache(cache, null)
+    }
     setState('out')
   }, [])
 

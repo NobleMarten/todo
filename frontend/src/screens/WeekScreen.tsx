@@ -288,7 +288,7 @@ function Upcoming({ tasks, today }: { tasks: Task[]; today: DateStr }) {
       {tasks.map((t) => {
         const left = daysBetween(today, t.due_date!)
         return (
-          <button key={t.id} className="upcoming-card" onClick={() => openTask(t.id)}>
+          <button key={t.id} className="upcoming-card" onClick={() => openTask(t.id, t)}>
             <span className={`upcoming-date ${left <= 14 ? 'soon' : ''}`}>
               {shortDate(t.due_date!)} · {left} {plural(left, ['день', 'дня', 'дней'])}
             </span>

@@ -44,6 +44,19 @@ export function SubtaskList({ subtasks, onToggle, onOpen }: ListProps) {
   )
 }
 
+/** Подзадачи ещё грузятся (карточка открыта из строки): столько же строк той же высоты — без скачка. */
+export function SubtaskPlaceholder({ count }: { count: number }) {
+  return (
+    <ul className="subtask-list" aria-busy="true">
+      {Array.from({ length: count }, (_, i) => (
+        <li key={i} className="subtask-row">
+          <span className="skeleton skeleton-line" style={{ width: `${55 - (i % 3) * 12}%` }} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 interface AdderProps {
   label: string // «подзадача» в строке списка, «добавить подзадачу» в карточке
   variant: 'chip' | 'link'

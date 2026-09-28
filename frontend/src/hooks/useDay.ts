@@ -5,7 +5,8 @@ import { patchTask, reorderTasks } from '../api/tasks'
 import type { DateStr, Day, Suggestions, Task, TaskPatch } from '../api/types'
 import { todayStr } from '../lib/date'
 import { scheduleDelete } from '../lib/pendingDelete'
-import { notifyChanged, subscribeChanges } from '../lib/sync'
+import { notifyChanged } from '../lib/sync'
+import { useCached } from './useCached'
 
 type ActiveBlock = 'planned' | 'overdue' | 'carry_over'
 const ACTIVE_BLOCKS: ActiveBlock[] = ['planned', 'overdue', 'carry_over']
@@ -28,65 +29,29 @@ function findTask(d: Day, id: number): Task | undefined {
 }
 
 /**
- * Экран «Сегодня» (GET /day) за локальную дату устройства. Мутации оптимистичные с откатом;
- * после ответа сервера день перечитывается целиком — раскладку по блокам решает бэкенд.
+ * Экран «Сегодня» (GET /day) за локальную дату устройства — из общего кэша (hooks/useCached):
+ * вернулись на вкладку — день виден сразу, свежий приходит в фоне. Мутации оптимистичные с откатом;
+ * после ответа сервера день перечитывается — раскладку по блокам решает бэкенд.
  */
 export function useDay() {
-  const [day, setDay] = useState<Day | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  // PWA может провисеть открытой всю ночь: вернулись на экран в новый день — ключ сменится, грузим новый день
+  const [date, setDate] = useState<DateStr>(todayStr)
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') setDate(todayStr())
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
+
+  const c = useCached<Day>(`day:${date}`, () => getDay(date), { errorText: 'не удалось загрузить день' })
+  const { set: setDay, refresh, notify } = c
+  const day = c.data ?? null
   const [actionError, setActionError] = useState<string | null>(null)
   const dayRef = useRef(day)
   useLayoutEffect(() => {
     dayRef.current = day
   })
-  const reqRef = useRef(0)
-
-  const fetchDay = useCallback(async () => {
-    const req = ++reqRef.current
-    const d = await getDay(todayStr())
-    return req === reqRef.current ? d : null
-  }, [])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const d = await fetchDay()
-      if (d === null) return
-      setDay(d)
-      setLoading(false)
-    } catch (e) {
-      setError(errorText(e, 'не удалось загрузить день'))
-      setLoading(false)
-    }
-  }, [fetchDay])
-
-  const refresh = useCallback(async () => {
-    try {
-      const d = await fetchDay()
-      if (d === null) return
-      setDay(d)
-      setError(null)
-    } catch {
-      /* оставляем то, что уже на экране */
-    }
-  }, [fetchDay])
-
-  useEffect(() => {
-    load()
-  }, [load])
-  useEffect(() => subscribeChanges(refresh), [refresh])
-
-  // PWA может провисеть открытой всю ночь: вернулись на экран в новый день — грузим новый день
-  useEffect(() => {
-    const onVisible = () => {
-      const d = dayRef.current
-      if (document.visibilityState === 'visible' && d && d.date !== todayStr()) load()
-    }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [load])
 
   const run = useCallback(
     async (optimistic: (d: Day) => Day, action: () => Promise<unknown>) => {
@@ -94,14 +59,14 @@ export function useDay() {
       if (snapshot) setDay(optimistic(snapshot))
       try {
         await action()
+        notify()
         await refresh()
-        notifyChanged(refresh)
       } catch (e) {
-        setDay(snapshot)
+        if (snapshot) setDay(snapshot)
         setActionError(errorText(e))
       }
     },
-    [refresh],
+    [setDay, refresh, notify],
   )
 
   /** Выполнить / вернуть. Выполненная сразу уезжает в «готово», возвращённая — из него. */
@@ -137,9 +102,9 @@ export function useDay() {
   const remove = useCallback((id: number) => {
     const d = dayRef.current
     const task = d && [...d.planned, ...d.overdue, ...d.carry_over].find((t) => t.id === id)
-    setDay((prev) => (prev ? without(prev, new Set([id])) : prev))
+    if (d) setDay(without(d, new Set([id])))
     scheduleDelete(id, task?.title ?? '')
-  }, [])
+  }, [setDay])
 
   /** «Перенести на сегодня»: одним POST /day/plan, задачи встают в конец плана. */
   const moveToToday = useCallback(
@@ -174,11 +139,11 @@ export function useDay() {
 
   return {
     day,
-    loading,
-    error,
+    loading: c.loading,
+    error: c.error,
     actionError,
     clearActionError: () => setActionError(null),
-    reload: load,
+    reload: c.reload,
     toggle,
     update,
     remove,

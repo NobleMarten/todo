@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import { getWeek } from '../api/day'
 import { createTask, patchTask } from '../api/tasks'
 import type { DateStr, NewTask, Task, TaskPatch, Week } from '../api/types'
 import { todayStr } from '../lib/date'
 import { scheduleDelete } from '../lib/pendingDelete'
-import { notifyChanged, subscribeChanges } from '../lib/sync'
+import { useCached } from './useCached'
 
 /** Неделя без задачи id во всех списках. */
 function without(w: Week, id: number): Week {
@@ -28,56 +28,19 @@ function findTask(w: Week, id: number): Task | undefined {
 }
 
 /**
- * Экран «Неделя» (GET /day/week) с from — понедельником по локальной дате. Мутации оптимистичные
- * с откатом; после ответа сервера неделя перечитывается целиком — раскладку по дням решает бэкенд.
+ * Экран «Неделя» (GET /day/week) с from — понедельником по локальной дате, из общего кэша
+ * (листали недели туда-обратно — уже виденная рисуется сразу). Мутации оптимистичные с откатом;
+ * после ответа сервера неделя перечитывается — раскладку по дням решает бэкенд.
  */
 export function useWeek(from: DateStr) {
-  const [week, setWeek] = useState<Week | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const c = useCached<Week>(`week:${from}`, () => getWeek(from), { errorText: 'не удалось загрузить неделю' })
+  const { set: setWeek, refresh, notify } = c
+  const week = c.data ?? null
   const [actionError, setActionError] = useState<string | null>(null)
   const weekRef = useRef(week)
   useLayoutEffect(() => {
     weekRef.current = week
   })
-  const reqRef = useRef(0)
-
-  const fetchWeek = useCallback(async () => {
-    const req = ++reqRef.current
-    const w = await getWeek(from)
-    return req === reqRef.current ? w : null
-  }, [from])
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const w = await fetchWeek()
-      if (w === null) return
-      setWeek(w)
-      setLoading(false)
-    } catch (e) {
-      setError(errorText(e, 'не удалось загрузить неделю'))
-      setLoading(false)
-    }
-  }, [fetchWeek])
-
-  const refresh = useCallback(async () => {
-    try {
-      const w = await fetchWeek()
-      if (w !== null) {
-        setWeek(w)
-        setError(null)
-      }
-    } catch {
-      /* оставляем то, что уже на экране */
-    }
-  }, [fetchWeek])
-
-  useEffect(() => {
-    load()
-  }, [load])
-  useEffect(() => subscribeChanges(refresh), [refresh])
 
   const run = useCallback(
     async (optimistic: (w: Week) => Week, action: () => Promise<unknown>) => {
@@ -85,14 +48,14 @@ export function useWeek(from: DateStr) {
       if (snapshot) setWeek(optimistic(snapshot))
       try {
         await action()
+        notify()
         await refresh()
-        notifyChanged(refresh)
       } catch (e) {
-        setWeek(snapshot)
+        if (snapshot) setWeek(snapshot)
         setActionError(errorText(e))
       }
     },
-    [refresh],
+    [setWeek, refresh, notify],
   )
 
   /** Выполнить / вернуть. Выполненная сегодня уезжает в «готово» сегодняшнего дня, если он в неделе. */
@@ -154,33 +117,33 @@ export function useWeek(from: DateStr) {
   const remove = useCallback((id: number) => {
     const w = weekRef.current
     const task = w ? findTask(w, id) : undefined
-    setWeek((prev) => (prev ? without(prev, id) : prev))
+    setWeek((prev) => prev && without(prev, id))
     scheduleDelete(id, task?.title ?? '')
-  }, [])
+  }, [setWeek])
 
   const add = useCallback(
     async (nt: NewTask) => {
       try {
         const created = await createTask(nt)
+        notify()
         await refresh()
-        notifyChanged(refresh)
         return created
       } catch (e) {
         setActionError(errorText(e))
         return null
       }
     },
-    [refresh],
+    [refresh, notify],
   )
 
   return {
-    week: week && week.from === from ? week : null,
-    staleWeek: week, // прошлая неделя, пока грузится новая: полоса не мигает пустотой
-    loading,
-    error,
+    week,
+    staleWeek: week,
+    loading: c.loading,
+    error: c.error,
     actionError,
     clearActionError: () => setActionError(null),
-    reload: load,
+    reload: c.reload,
     toggle,
     schedule,
     update,

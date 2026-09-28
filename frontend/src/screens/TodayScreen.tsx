@@ -197,7 +197,7 @@ function FocusCard({ task, project, today, onToggle }: FocusProps) {
         >
           <span className={`check prio-${task.priority}`} />
         </button>
-        <button className="focus-main" onClick={() => openTask(task.id)}>
+        <button className="focus-main" onClick={() => openTask(task.id, task)}>
           <span className="focus-title">{task.title}</span>
           {(project || task.due_date || (stats && stats.total > 0)) && (
             <span className="task-meta">

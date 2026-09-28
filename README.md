@@ -100,6 +100,7 @@ Cookie работает только при same-origin (фронт и API за 
 | запрос                  | тело                                                                  | ответ                  |
 |-------------------------|-----------------------------------------------------------------------|------------------------|
 | `GET /tasks?view=…`     | —                                                                     | `{items, total}`       |
+| `GET /tasks/counts?today=` | —                                                                  | `{today, week, overdue, all, inbox}` — `total` этих вьюх одним запросом |
 | `GET /tasks/{id}`       | —                                                                     | `Task` + `subtasks: [Task]` |
 | `POST /tasks`           | `{title, priority?, project_id?, parent_id?, due_date?, scheduled_for?}` | `201 Task`          |
 | `PATCH /tasks/{id}`     | любые из `title, done, priority, project_id, parent_id, due_date, scheduled_for, note` | `Task` |

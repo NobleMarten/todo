@@ -19,7 +19,7 @@ export function DoneRow({ task, project, aside, onUndo }: Props) {
           <CheckIcon />
         </span>
       </button>
-      <button className="done-main" onClick={() => openTask(task.id)}>
+      <button className="done-main" onClick={() => openTask(task.id, task)}>
         <span className="done-title">{task.title}</span>
         {project && (
           <span className="task-meta">

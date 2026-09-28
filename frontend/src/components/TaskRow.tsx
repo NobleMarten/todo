@@ -84,7 +84,7 @@ export function TaskRow({
           </span>
         </button>
 
-        <button className="task-main" onClick={() => openTask(task.id)}>
+        <button className="task-main" onClick={() => openTask(task.id, task)}>
           <span className={`task-title ${expanded ? 'strong' : ''}`}>{task.title}</span>
           {project && (
             <span className="task-meta">
@@ -180,7 +180,7 @@ function SubtaskPanel({ parentId, dueDate }: { parentId: number; dueDate: DateSt
       <SubtaskList
         subtasks={task.subtasks ?? []}
         onToggle={(s) => updateSubtask(s.id, { done: !s.done })}
-        onOpen={(s) => openTask(s.id)}
+        onOpen={(s) => openTask(s.id, s)}
       />
       <div className="task-subtasks-footer">
         {dueDate && <span className="badge badge-warn">до {shortDate(dueDate)}</span>}

@@ -301,6 +301,33 @@ func TestList_Views(t *testing.T) {
 	})
 }
 
+func TestCounts(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newTaskService()
+	today := mustAdd(t, s, storage.NewTask{Title: "today", ScheduledFor: &d0})
+	mustAdd(t, s, storage.NewTask{Title: "overdue", DueDate: ptr(d0.AddDays(-1))})
+	mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &today.ID, ScheduledFor: &d0})
+	done := mustAdd(t, s, storage.NewTask{Title: "done", ScheduledFor: &d0})
+	if _, err := s.Patch(ctx, done.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Counts(ctx, &d0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{"today": 1, "week": 1, "overdue": 1, "all": 2, "inbox": 2}
+	for _, v := range CountViews {
+		if got[v] != want[v] {
+			t.Fatalf("counts = %v, want %v", got, want)
+		}
+		_, total, err := s.List(ctx, ListQuery{View: v, Today: &d0})
+		if err != nil || total != got[v] {
+			t.Fatalf("%s: counts %d, List total %d (%v)", v, got[v], total, err)
+		}
+	}
+}
+
 func TestList_Errors(t *testing.T) {
 	s, _ := newTaskService()
 	tests := []struct {
