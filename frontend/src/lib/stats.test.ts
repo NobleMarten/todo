@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import type { StatsDay } from '../api/types'
 import { addDays } from './date'
-import { bucketTitle, bucketize, formatLead, niceMax, peakIndex, periodRange, signed, taskFacts } from './stats'
+import {
+  axisTicks,
+  bucketTitle,
+  bucketize,
+  formatLead,
+  monotonePath,
+  niceMax,
+  peakIndex,
+  perDay,
+  periodRange,
+  signed,
+  taskFacts,
+} from './stats'
 
 function daysFrom(from: string, n: number): StatsDay[] {
   return Array.from({ length: n }, (_, i) => ({ date: addDays(from, i), done: 1, created: i % 2 }))
@@ -45,8 +57,8 @@ describe('bucketize', () => {
 })
 
 describe('numbers', () => {
-  it('niceMax rounds up to 1-2-5 steps', () => {
-    expect([0, 1, 3, 5, 6, 11, 21, 50, 51, 130].map(niceMax)).toEqual([1, 1, 3, 5, 10, 20, 50, 50, 100, 200])
+  it('niceMax rounds up to close even steps', () => {
+    expect([0, 1, 3, 5, 6, 7, 11, 22, 50, 51, 130].map(niceMax)).toEqual([1, 1, 3, 5, 6, 8, 12, 24, 50, 60, 160])
   })
 
   it('signed uses a real minus', () => {
@@ -80,5 +92,45 @@ describe('taskFacts', () => {
       'сделана за 3 дня',
       'позже срока на 2 дня',
     ])
+  })
+})
+
+describe('chart geometry', () => {
+  it('monotonePath passes through every point', () => {
+    expect(monotonePath([])).toBe('')
+    expect(monotonePath([[0, 5]])).toBe('M0,5')
+    const d = monotonePath([
+      [0, 10],
+      [10, 0],
+      [20, 10],
+    ])
+    expect(d.startsWith('M0,10C')).toBe(true)
+    expect(d).toContain(' 10,0C')
+    expect(d.endsWith(' 20,10')).toBe(true)
+  })
+
+  it('monotonePath never overshoots between equal neighbours', () => {
+    // плато 0-0 рядом с пиком: контрольные точки плато не уходят ниже нуля (y растёт вниз — не больше 100)
+    const d = monotonePath([
+      [0, 100],
+      [10, 100],
+      [20, 0],
+      [30, 100],
+    ])
+    const ys = [...d.matchAll(/,(-?[\d.]+)/g)].map((m) => Number(m[1]))
+    expect(Math.max(...ys)).toBeLessThanOrEqual(100)
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(0)
+  })
+
+  it('axisTicks adds a round middle', () => {
+    expect(axisTicks(4)).toEqual([0, 2, 4])
+    expect(axisTicks(5)).toEqual([0, 5])
+    expect(axisTicks(1)).toEqual([0, 1])
+  })
+
+  it('perDay formats with a comma', () => {
+    expect(perDay(41, 30)).toBe('1,4')
+    expect(perDay(0, 7)).toBe('0')
+    expect(perDay(14, 7)).toBe('2')
   })
 })

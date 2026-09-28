@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { motion } from 'framer-motion'
+import type { CSSProperties, ReactNode } from 'react'
 import type { DateStr, Project, StatsSummary, TaskRef } from '../api/types'
 import { useOpenTask } from '../hooks/useOpenTask'
 import { daysBetween, toDateStr } from '../lib/date'
@@ -10,6 +11,7 @@ import {
   formatLead,
   onTimeRate,
   peakIndex,
+  perDay,
   percent,
   periodOf,
   pluralDays,
@@ -17,7 +19,7 @@ import {
   type Period,
 } from '../lib/stats'
 import { SkeletonBlock } from './Skeleton'
-import { ListBars, MiniColumns, PrioBar, TrendChart, type ListBar } from './StatsCharts'
+import { HourStrip, ListBars, PrioBar, Ring, TrendChart, WeekdayColumns, type ListBar } from './StatsCharts'
 
 interface Props {
   period: Period
@@ -29,43 +31,52 @@ interface Props {
   projects: Map<number, Project>
 }
 
-const WEEKDAYS = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
 const WEEKDAYS_DATIVE = ['понедельникам', 'вторникам', 'средам', 'четвергам', 'пятницам', 'субботам', 'воскресеньям']
-const HOUR_LABELS = Array.from({ length: 24 }, (_, h) => (h % 6 === 0 ? String(h) : ''))
 const MAX_LISTS = 6
 
-/** Статистика экрана «Итоги»: период, главные числа, графики и то, что сейчас в работе. */
+/** Статистика экрана «Итоги»: период, главная карточка с графиком, плитки и блоки-карточки. */
 export function StatsPanel({ period, onPeriod, data, loading, error, onReload, projects }: Props) {
   return (
     <section className="stats" aria-label="Статистика">
-      <div className="chips" role="radiogroup" aria-label="период">
+      <div className="period" role="radiogroup" aria-label="период">
         {PERIODS.map((p) => (
           <button
             key={p.key}
             role="radio"
             aria-checked={period === p.key}
-            className={`chip chip-mono ${period === p.key ? 'active' : ''}`}
+            className={`period-btn ${period === p.key ? 'active' : ''}`}
             onClick={() => onPeriod(p.key)}
           >
-            {p.label}
+            {period === p.key && (
+              <motion.span
+                layoutId="period-pill"
+                className="period-pill"
+                transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+              />
+            )}
+            <span className="period-label">{p.label}</span>
           </button>
         ))}
       </div>
 
       {loading ? (
-        <SkeletonBlock height={420} />
+        <>
+          <SkeletonBlock height={330} />
+          <SkeletonBlock height={120} />
+        </>
       ) : error || !data ? (
         <button className="error-bar" role="alert" onClick={onReload}>
           {error ?? 'не удалось загрузить статистику'} · повторить
         </button>
       ) : data.totals.done === 0 && data.totals.created === 0 && data.backlog.active === 0 ? (
-        <div className="empty">
+        <div className="stats-card empty">
           <span className="empty-icon">◫</span>
           <span className="empty-title">за этот период пусто</span>
           <span className="empty-hint">создай или выполни задачу — здесь появятся графики</span>
         </div>
       ) : (
-        <Summary data={data} period={period} projects={projects} />
+        // key: при смене периода карточки заново «въезжают»
+        <Summary key={period} data={data} period={period} projects={projects} />
       )}
     </section>
   )
@@ -74,112 +85,134 @@ export function StatsPanel({ period, onPeriod, data, loading, error, onReload, p
 function Summary({ data, period, projects }: { data: StatsSummary; period: Period; projects: Map<number, Project> }) {
   const { totals: t, prev } = data
   const vs = periodOf(period).vs
+  const days = data.days.length
   const rate = onTimeRate(t)
   const prevRate = onTimeRate(prev)
-  const days = data.days.length
   const createdRate = percent(t.created_done, t.created)
+  const d = data.weekday
+  const peakDay = peakIndex(d)
+  const peakHour = peakIndex(data.hours)
+  let order = 0
+  const next = () => ({ '--i': order++ }) as CSSProperties
 
   return (
     <>
-      <div className="kpis">
-        <Kpi label="выполнено" value={String(t.done)} delta={t.done - prev.done} good="up" vs={vs} />
-        <Kpi label="создано" value={String(t.created)} delta={t.created - prev.created} vs={vs} />
-        <Kpi
-          label="в срок"
-          value={rate === null ? '—' : `${rate}%`}
-          hint={t.on_time + t.late > 0 ? `${t.on_time} из ${t.on_time + t.late} с дедлайном` : 'не было дедлайнов'}
-          delta={rate !== null && prevRate !== null ? rate - prevRate : undefined}
-          unit="п.п."
-          good="up"
-          vs={vs}
-        />
-        <Kpi
-          label="до готовности"
-          value={formatLead(t.lead_hours)}
-          hint="медиана: от создания до выполнения"
-        />
-      </div>
-      <p className="stats-note">
-        {t.active_days > 0 ? `${pluralDays(t.active_days)} из ${days} с выполненными` : 'ни одного дня с выполненными'}
-        {createdRate !== null && ` · из созданных сделано ${t.created_done} из ${t.created} (${createdRate}%)`}
-      </p>
+      <div className="stats-card hero" style={next()}>
+        <div className="hero-head">
+          <div className="hero-main">
+            <span className="sc-kicker">выполнено</span>
+            <div className="hero-figure">
+              <span className="hero-num">{t.done}</span>
+              <Delta value={t.done - prev.done} good="up" />
+            </div>
+            <span className="hero-sub">
+              ≈ {perDay(t.done, days)} в день · {vs}
+            </span>
+          </div>
+          <div className="hero-legend" aria-hidden="true">
+            <span>
+              <i className="key key-done" /> выполнено
+            </span>
+            <span>
+              <i className="key key-created" /> создано
+            </span>
+          </div>
+        </div>
 
-      <Block title="выполнено и создано">
         <TrendChart buckets={bucketize(data.days, period)} />
-      </Block>
+
+        <div className="hero-foot">
+          <Metric label="создано" value={String(t.created)} extra={<Delta value={t.created - prev.created} />} />
+          <Metric label="из созданных сделано" value={createdRate === null ? '—' : `${createdRate}%`} />
+          <Metric label="дней с выполненными" value={`${t.active_days}`} extra={<span className="metric-of">из {days}</span>} />
+        </div>
+      </div>
+
+      <div className="tiles" style={next()}>
+        <div className="stats-card tile">
+          <Ring value={rate} />
+          <div className="tile-body">
+            <span className="sc-kicker">в срок</span>
+            <span className="tile-num">{rate === null ? '—' : `${rate}%`}</span>
+            <span className="tile-hint">
+              {t.on_time + t.late > 0 ? `${t.on_time} из ${t.on_time + t.late} с дедлайном` : 'не было дедлайнов'}
+            </span>
+            {rate !== null && prevRate !== null && <Delta value={rate - prevRate} unit="п.п." good="up" />}
+          </div>
+        </div>
+        <div className="stats-card tile">
+          <div className="tile-body">
+            <span className="sc-kicker">до готовности</span>
+            <span className="tile-num">{formatLead(t.lead_hours)}</span>
+            <span className="tile-hint">медиана от создания до галочки</span>
+            {prev.lead_hours !== null && t.lead_hours !== null && (
+              <span className="tile-hint">было {formatLead(prev.lead_hours)}</span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {data.lists.length > 0 && (
-        <Block title="по спискам">
+        <Card title="по спискам" style={next()}>
           <ListBars rows={listRows(data.lists, projects)} />
-        </Block>
+        </Card>
       )}
 
       {t.done > 0 && (
-        <Block title="по приоритетам">
+        <Card title="по приоритетам" style={next()}>
           <PrioBar counts={data.by_priority} />
-        </Block>
+        </Card>
       )}
 
       {t.done > 0 && (
-        <Block title="ритм" aside={rhythmNote(data.weekday, data.hours)}>
-          <div className="rhythm">
-            <MiniColumns
-              values={data.weekday}
-              labels={WEEKDAYS}
-              label="выполнено по дням недели"
-              tip={(i) => `${WEEKDAYS[i]} · ${pluralTasks(data.weekday[i])}`}
-            />
-            <MiniColumns
-              values={data.hours}
-              labels={HOUR_LABELS}
-              label="выполнено по часам"
-              tip={(h) => `${h}:00–${h + 1}:00 · ${pluralTasks(data.hours[h])}`}
-            />
-          </div>
-        </Block>
+        <Card
+          title="ритм"
+          aside={peakDay >= 0 && peakHour >= 0 ? `чаще по ${WEEKDAYS_DATIVE[peakDay]}, около ${peakHour}:00` : undefined}
+          style={next()}
+        >
+          <WeekdayColumns values={d} />
+          <div className="sc-sub">по часам</div>
+          <HourStrip values={data.hours} />
+        </Card>
       )}
 
-      <Backlog backlog={data.backlog} today={data.to} />
+      <Backlog backlog={data.backlog} today={data.to} style={next()} />
     </>
   )
 }
 
-function Block({ title, aside, children }: { title: string; aside?: string; children: ReactNode }) {
+function Card({ title, aside, style, children }: { title: string; aside?: ReactNode; style?: CSSProperties; children: ReactNode }) {
   return (
-    <div className="stats-block">
-      <div className="section-label">
-        {title}
-        {aside && <span className="stats-aside">{aside}</span>}
+    <div className="stats-card" style={style}>
+      <div className="sc-head">
+        <span className="sc-title">{title}</span>
+        {aside && <span className="sc-aside">{aside}</span>}
       </div>
       {children}
     </div>
   )
 }
 
-interface KpiProps {
-  label: string
-  value: string
-  hint?: string
-  delta?: number
-  unit?: string
-  /** в какую сторону изменение хорошее; без него изменение нейтральное */
-  good?: 'up'
-  vs?: string
+/** Изменение к прошлому периоду: зелёное/красное, если у метрики есть хорошая сторона, иначе нейтральное. */
+function Delta({ value, unit, good }: { value: number; unit?: string; good?: 'up' }) {
+  const tone = value === 0 || !good ? 'neutral' : value > 0 ? 'good' : 'bad'
+  const arrow = value > 0 ? '↑' : value < 0 ? '↓' : ''
+  return (
+    <span className={`delta ${tone}`}>
+      {arrow}
+      {signed(value).replace(/^[+−]/, '')}
+      {unit ? ` ${unit}` : ''}
+    </span>
+  )
 }
 
-function Kpi({ label, value, hint, delta, unit, good, vs }: KpiProps) {
-  const tone = delta === undefined || delta === 0 || !good ? 'neutral' : delta > 0 ? 'good' : 'bad'
+function Metric({ label, value, extra }: { label: string; value: string; extra?: ReactNode }) {
   return (
-    <div className="kpi">
-      <span className="kpi-label">{label}</span>
-      <span className="kpi-value">{value}</span>
-      {delta !== undefined && (
-        <span className={`kpi-delta ${tone}`}>
-          {signed(delta)}
-          {unit ? ` ${unit}` : ''} <span className="kpi-vs">{vs}</span>
-        </span>
-      )}
-      {hint && <span className="kpi-hint">{hint}</span>}
+    <div className="metric">
+      <span className="metric-value">
+        {value} {extra}
+      </span>
+      <span className="metric-label">{label}</span>
     </div>
   )
 }
@@ -202,33 +235,26 @@ function listRows(lists: StatsSummary['lists'], projects: Map<number, Project>):
   ]
 }
 
-function rhythmNote(weekday: number[], hours: number[]): string | undefined {
-  const d = peakIndex(weekday)
-  const h = peakIndex(hours)
-  if (d < 0 || h < 0) return undefined
-  return `чаще по ${WEEKDAYS_DATIVE[d]}, около ${h}:00`
-}
-
-function Backlog({ backlog: b, today }: { backlog: StatsSummary['backlog']; today: DateStr }) {
+function Backlog({ backlog: b, today, style }: { backlog: StatsSummary['backlog']; today: DateStr; style: CSSProperties }) {
   const openTask = useOpenTask()
   const delayed = b.delayed.filter((t) => !isHidden(t.id))
   const oldest = b.oldest && !isHidden(b.oldest.id) ? b.oldest : null
   if (b.active === 0) return null
 
   return (
-    <Block title="сейчас в работе" aside={pluralTasks(b.active)}>
+    <Card title="сейчас в работе" aside={pluralTasks(b.active)} style={style}>
       <div className="backlog-grid">
         <Cell value={b.overdue} label="просрочено" tone={b.overdue > 0 ? 'danger' : undefined} />
         <Cell value={b.no_dates} label="без дат" />
         <Cell value={b.inbox} label="во входящих" />
-        <Cell value={b.stale} label="не трогали 30+ дней" tone={b.stale > 0 ? 'warn' : undefined} />
+        <Cell value={b.stale} label="не трогали 30+ дн" tone={b.stale > 0 ? 'warn' : undefined} />
         <Cell value={b.postponed} label={plural(b.postponed, ['перенос', 'переноса', 'переносов'])} />
         <Cell value={b.age_days === null ? '—' : `${b.age_days} дн`} label="типичный возраст" />
       </div>
 
       {delayed.length > 0 && (
         <div className="stats-tasks">
-          <div className="stats-sub">чаще всего переносятся</div>
+          <div className="sc-sub">чаще всего переносятся</div>
           {delayed.map((t) => (
             <TaskLine key={t.id} task={t} aside={`×${t.postponed}`} onOpen={openTask} />
           ))}
@@ -236,11 +262,11 @@ function Backlog({ backlog: b, today }: { backlog: StatsSummary['backlog']; toda
       )}
       {oldest && (
         <div className="stats-tasks">
-          <div className="stats-sub">дольше всех ждёт</div>
+          <div className="sc-sub">дольше всех ждёт</div>
           <TaskLine task={oldest} aside={ageLabel(oldest.created_at, today)} onOpen={openTask} />
         </div>
       )}
-    </Block>
+    </Card>
   )
 }
 
@@ -257,7 +283,10 @@ function TaskLine({ task, aside, onOpen }: { task: TaskRef; aside: string; onOpe
   return (
     <button className="stats-task" onClick={() => onOpen(task.id)}>
       <span className="stats-task-title">{task.title}</span>
-      <span className="stats-task-aside mono-num">{aside}</span>
+      <span className="stats-task-aside">{aside}</span>
+      <span className="stats-task-chevron" aria-hidden="true">
+        ›
+      </span>
     </button>
   )
 }

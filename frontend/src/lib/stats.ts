@@ -95,13 +95,68 @@ export function bucketTitle(b: Bucket): string {
   return b.from === b.to ? `${weekdayShort(b.from)}, ${shortDate(b.from)}` : `${shortDate(b.from)} – ${shortDate(b.to)}`
 }
 
+// ── геометрия графиков ────────────────────────────────────────────────────────
+
+/**
+ * Плавная линия через точки: монотонный кубический сплайн (Фриша — Карлсона). В отличие от обычного
+ * сглаживания не выгибается ниже нуля и выше пиков — график не рисует того, чего не было.
+ */
+export function monotonePath(pts: [number, number][]): string {
+  const n = pts.length
+  if (n === 0) return ''
+  const f = (v: number) => Number(v.toFixed(2))
+  if (n === 1) return `M${f(pts[0][0])},${f(pts[0][1])}`
+  const dx: number[] = []
+  const slope: number[] = []
+  for (let i = 0; i < n - 1; i++) {
+    dx.push(pts[i + 1][0] - pts[i][0])
+    slope.push((pts[i + 1][1] - pts[i][1]) / dx[i])
+  }
+  // касательные: на краях — наклон отрезка, внутри — гармоническое среднее, на экстремумах — 0
+  const m = pts.map((_, i) => {
+    if (i === 0) return slope[0]
+    if (i === n - 1) return slope[n - 2]
+    const a = slope[i - 1]
+    const b = slope[i]
+    if (a * b <= 0) return 0
+    const w1 = 2 * dx[i] + dx[i - 1]
+    const w2 = dx[i] + 2 * dx[i - 1]
+    return (w1 + w2) / (w1 / a + w2 / b)
+  })
+  let d = `M${f(pts[0][0])},${f(pts[0][1])}`
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = pts[i]
+    const [x1, y1] = pts[i + 1]
+    const h = dx[i] / 3
+    d += `C${f(x0 + h)},${f(y0 + m[i] * h)} ${f(x1 - h)},${f(y1 - m[i + 1] * h)} ${f(x1)},${f(y1)}`
+  }
+  return d
+}
+
+/** Шкала оси: 0, середина (если круглая) и верх. */
+export function axisTicks(max: number): number[] {
+  return max >= 2 && max % 2 === 0 ? [0, max / 2, max] : [0, max]
+}
+
+/** Среднее в день с одной цифрой после запятой: «1,4». */
+export function perDay(total: number, days: number): string {
+  if (days <= 0) return '0'
+  return (Math.round((total / days) * 10) / 10).toLocaleString('ru-RU', { maximumFractionDigits: 1 })
+}
+
 // ── числа ─────────────────────────────────────────────────────────────────────
 
-/** Верх шкалы: круглое число не меньше n (1, 2, 5, 10, 20, 50…), но не меньше 1. */
+// шаги шкалы выше 5: чётные (середина оси — целое) и частые, чтобы над пиком не оставалось полграфика пустоты
+const NICE_STEPS = [1, 1.2, 1.6, 2, 2.4, 3, 4, 5, 6, 8, 10]
+
+/** Верх шкалы: ближайшее «круглое» число не меньше n (…, 10, 12, 16, 20, 24, 30…), но не меньше 1. */
 export function niceMax(n: number): number {
   if (n <= 5) return Math.max(1, Math.ceil(n))
   const pow = 10 ** Math.floor(Math.log10(n))
-  for (const step of [1, 2, 5, 10]) if (n <= step * pow) return step * pow
+  for (const step of NICE_STEPS) {
+    const v = Math.round(step * pow)
+    if (n <= v) return v
+  }
   return 10 * pow
 }
 
