@@ -14,10 +14,17 @@ import (
 type fullRepo interface {
 	TaskRepo
 	ProjectRepo
+	UserRepo
 }
 
+// u1 — пользователь, которого миграция 00008 заводит под существующие данные (в фейке — просто id).
+const u1 = 1
+
 func TestRepoContract_Fake(t *testing.T) {
-	runContract(t, func(t *testing.T) fullRepo { return &FakeRepo{} })
+	// владелец u1 — как его заводит миграция 00008 в базе
+	runContract(t, func(t *testing.T) fullRepo {
+		return &FakeRepo{Users: []model.User{{ID: u1, Login: "noblemarten"}}}
+	})
 }
 
 func TestRepoContract_Postgres(t *testing.T) {
@@ -39,7 +46,7 @@ func mustCreate(t *testing.T, r fullRepo, nt NewTask) model.Task {
 	if nt.Priority == "" {
 		nt.Priority = "low"
 	}
-	task, err := r.CreateTask(t.Context(), nt)
+	task, err := r.CreateTask(t.Context(), u1, nt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,10 +62,176 @@ func ids(tasks []model.Task) []int {
 }
 
 func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
+	t.Run("users are isolated", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		other, err := r.CreateUser(ctx, "girlfriend", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		u2 := other.ID
+
+		p1, err := r.CreateProject(ctx, u1, "мой", "#6AA6FF")
+		if err != nil {
+			t.Fatal(err)
+		}
+		mine := mustCreate(t, r, NewTask{Title: "моя", ProjectID: &p1.ID, ScheduledFor: &d0})
+		sub := mustCreate(t, r, NewTask{Title: "моя подзадача", ParentID: &mine.ID})
+		theirs, err := r.CreateTask(ctx, u2, NewTask{Title: "её", Priority: "low", ScheduledFor: &d0})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// списки и выборки — только свои
+		items, total, err := r.ListTasks(ctx, u2, TaskQuery{})
+		if err != nil || total != 1 || !slices.Equal(ids(items), []int{theirs.ID}) {
+			t.Fatalf("u2 видит %v (total %d, %v)", ids(items), total, err)
+		}
+		if ps, _ := r.ListProjects(ctx, u2, true, d0); len(ps) != 0 {
+			t.Fatalf("u2 видит списки u1: %+v", ps)
+		}
+		// позиции считаются внутри пользователя
+		if theirs.Position != 1 {
+			t.Fatalf("первая задача u2 на позиции %d", theirs.Position)
+		}
+
+		// чужое — «не найдено», и ничего не меняется
+		if _, err := r.GetTask(ctx, u2, mine.ID); err != model.ErrNotFound {
+			t.Fatalf("GetTask чужой: %v", err)
+		}
+		if subs, _ := r.Subtasks(ctx, u2, mine.ID); len(subs) != 0 {
+			t.Fatalf("Subtasks чужой: %v", ids(subs))
+		}
+		if _, err := r.PatchTask(ctx, u2, mine.ID, TaskPatch{Title: ptr("взлом")}); err != model.ErrNotFound {
+			t.Fatalf("PatchTask чужой: %v", err)
+		}
+		if err := r.DeleteTask(ctx, u2, mine.ID); err != model.ErrNotFound {
+			t.Fatalf("DeleteTask чужой: %v", err)
+		}
+		if _, err := r.GetProject(ctx, u2, p1.ID); err != model.ErrProjectNotFound {
+			t.Fatalf("GetProject чужой: %v", err)
+		}
+		if _, err := r.PatchProject(ctx, u2, p1.ID, ProjectPatch{Name: ptr("взлом")}); err != model.ErrProjectNotFound {
+			t.Fatalf("PatchProject чужой: %v", err)
+		}
+		if err := r.DeleteProject(ctx, u2, p1.ID); err != model.ErrProjectNotFound {
+			t.Fatalf("DeleteProject чужой: %v", err)
+		}
+		if err := r.ReorderTasks(ctx, u2, TaskFilter{}, []int{mine.ID, theirs.ID}); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.ReorderProjects(ctx, u2, []int{p1.ID}); err != nil {
+			t.Fatal(err)
+		}
+		tomorrow := d0.AddDays(1)
+		if err := r.PlanDay(ctx, u2, tomorrow, []int{mine.ID}, []int{sub.ID}); err != nil {
+			t.Fatal(err)
+		}
+		got, err := r.GetTask(ctx, u1, mine.ID)
+		if err != nil || got.Title != "моя" || got.Position != mine.Position || !eqPtr(got.ScheduledFor, d0) {
+			t.Fatalf("задачу u1 задело действиями u2: %+v (%v)", got, err)
+		}
+		if p, _ := r.GetProject(ctx, u1, p1.ID); p.Name != "мой" || p.Position != p1.Position {
+			t.Fatalf("список u1 задело: %+v", p)
+		}
+		if act, _ := r.DoneActivity(ctx, u2, DateRange{From: d0, To: d0}, time.UTC); len(act) != 0 {
+			t.Fatalf("активность u2: %v", act)
+		}
+
+		// связать свою задачу с чужим списком или чужим родителем нельзя (в базе — внешние ключи)
+		if _, err := r.CreateTask(ctx, u2, NewTask{Title: "в чужой список", Priority: "low", ProjectID: &p1.ID}); err == nil {
+			t.Fatal("задача u2 создана в списке u1")
+		}
+		if _, err := r.CreateTask(ctx, u2, NewTask{Title: "чужая подзадача", Priority: "low", ParentID: &mine.ID}); err == nil {
+			t.Fatal("подзадача u2 создана у задачи u1")
+		}
+		if _, err := r.PatchTask(ctx, u2, theirs.ID, TaskPatch{ProjectID: model.Opt[int]{Set: true, Value: &p1.ID}}); err == nil {
+			t.Fatal("задача u2 перенесена в список u1")
+		}
+		// удаление своего списка не трогает чужие задачи
+		if err := r.DeleteProject(ctx, u1, p1.ID); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := r.GetTask(ctx, u2, theirs.ID); got.ID != theirs.ID {
+			t.Fatal("задача u2 пропала")
+		}
+	})
+
+	t.Run("users and sessions", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		u, err := r.CreateUser(ctx, "alice", "hash")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.CreateUser(ctx, "alice", "x"); err != model.ErrLoginTaken {
+			t.Fatalf("повторный логин: %v", err)
+		}
+		if got, err := r.UserByLogin(ctx, "alice"); err != nil || got.ID != u.ID || got.PasswordHash != "hash" {
+			t.Fatalf("UserByLogin: %+v %v", got, err)
+		}
+		if _, err := r.UserByLogin(ctx, "nobody"); err != model.ErrUserNotFound {
+			t.Fatalf("нет логина: %v", err)
+		}
+		if err := r.SetPassword(ctx, u.ID, "new"); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := r.UserByLogin(ctx, "alice"); got.PasswordHash != "new" {
+			t.Fatalf("пароль не сменился: %q", got.PasswordHash)
+		}
+		if users, _ := r.ListUsers(ctx); !slices.ContainsFunc(users, func(x model.User) bool { return x.Login == "alice" }) {
+			t.Fatalf("ListUsers: %+v", users)
+		}
+
+		// от настоящих часов: CreateSession чистит истёкшие по времени базы
+		now := time.Now().UTC().Truncate(time.Second)
+		h1, h2, old := []byte("hash-one-32-bytes-long-.........."), []byte("hash-two"), []byte("old")
+		if err := r.CreateSession(ctx, u.ID, old, now.Add(-time.Hour)); err != nil { // уже истёкшая
+			t.Fatal(err)
+		}
+		if err := r.CreateSession(ctx, u.ID, h1, now.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.CreateSession(ctx, u.ID, h2, now.Add(time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		got, exp, err := r.SessionUser(ctx, h1, now)
+		if err != nil || got.ID != u.ID || !exp.Equal(now.Add(time.Hour)) {
+			t.Fatalf("SessionUser: %+v %v %v", got, exp, err)
+		}
+		if _, _, err := r.SessionUser(ctx, old, now); err != model.ErrUnauthorized {
+			t.Fatalf("истёкшая сессия: %v", err)
+		}
+		if _, _, err := r.SessionUser(ctx, h1, now.Add(2*time.Hour)); err != model.ErrUnauthorized {
+			t.Fatalf("сессия после срока: %v", err)
+		}
+		if err := r.ExtendSession(ctx, h1, now.Add(48*time.Hour)); err != nil {
+			t.Fatal(err)
+		}
+		if _, exp, _ := r.SessionUser(ctx, h1, now.Add(2*time.Hour)); !exp.Equal(now.Add(48 * time.Hour)) {
+			t.Fatalf("продление: %v", exp)
+		}
+		if err := r.DeleteSession(ctx, h1); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := r.SessionUser(ctx, h1, now); err != model.ErrUnauthorized {
+			t.Fatalf("после выхода: %v", err)
+		}
+		if _, _, err := r.SessionUser(ctx, h2, now); err != nil {
+			t.Fatalf("другая сессия закрылась: %v", err)
+		}
+		if err := r.DeleteUserSessions(ctx, u.ID); err != nil {
+			t.Fatal(err)
+		}
+		if _, _, err := r.SessionUser(ctx, h2, now); err != model.ErrUnauthorized {
+			t.Fatalf("после выхода везде: %v", err)
+		}
+	})
+
 	t.Run("filters and sort", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()
-		p, err := r.CreateProject(ctx, "go", "#6AA6FF")
+		p, err := r.CreateProject(ctx, u1, "go", "#6AA6FF")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -71,10 +244,10 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		plain := mustCreate(t, r, NewTask{Title: "plain"})
 		sub := mustCreate(t, r, NewTask{Title: "sub", ParentID: &plain.ID, ScheduledFor: &d0})
 		done := mustCreate(t, r, NewTask{Title: "done", ScheduledFor: &d0})
-		if _, err := r.PatchTask(ctx, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
+		if _, err := r.PatchTask(ctx, u1, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := r.PatchTask(ctx, sub.ID, TaskPatch{Done: ptr(true)}); err != nil {
+		if _, err := r.PatchTask(ctx, u1, sub.ID, TaskPatch{Done: ptr(true)}); err != nil {
 			t.Fatal(err)
 		}
 
@@ -109,7 +282,7 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 		for _, tc := range cases {
 			t.Run(tc.name, func(t *testing.T) {
-				items, total, err := r.ListTasks(ctx, tc.q)
+				items, total, err := r.ListTasks(ctx, u1, tc.q)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -122,13 +295,13 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 			})
 		}
 
-		_, total, err := r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{Done: &f}, Limit: 2})
+		_, total, err := r.ListTasks(ctx, u1, TaskQuery{Filter: TaskFilter{Done: &f}, Limit: 2})
 		if err != nil || total != 6 {
 			t.Fatalf("total до пагинации = %d, %v; want 6", total, err)
 		}
 
 		// прогресс подзадач у корня
-		items, _, err := r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{NoDates: true}})
+		items, _, err := r.ListTasks(ctx, u1, TaskQuery{Filter: TaskFilter{NoDates: true}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -136,7 +309,7 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 			t.Fatalf("subtask_stats = %+v, want {1 1}", s)
 		}
 
-		projects, err := r.ListProjects(ctx, false, d0)
+		projects, err := r.ListProjects(ctx, u1, false, d0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +317,7 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		if i < 0 || *projects[i].Counts != (model.ProjectCounts{Active: 2, Overdue: 0}) {
 			t.Fatalf("counts = %+v", projects)
 		}
-		projects, _ = r.ListProjects(ctx, false, d0.AddDays(8))
+		projects, _ = r.ListProjects(ctx, u1, false, d0.AddDays(8))
 		i = slices.IndexFunc(projects, func(x model.Project) bool { return x.ID == p.ID })
 		if projects[i].Counts.Overdue != 1 {
 			t.Fatalf("overdue на d0+8 = %d, want 1", projects[i].Counts.Overdue)
@@ -158,7 +331,7 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		created := task.UpdatedAt
 
 		// ключ отсутствует — поле не трогаем; null — очищаем
-		got, err := r.PatchTask(ctx, task.ID, TaskPatch{
+		got, err := r.PatchTask(ctx, u1, task.ID, TaskPatch{
 			DueDate: model.Opt[model.Date]{Set: true},
 			Note:    model.Opt[string]{Set: true, Value: ptr("заметка")},
 		})
@@ -178,11 +351,11 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 			t.Fatal("updated_at не обновился")
 		}
 
-		got, err = r.PatchTask(ctx, task.ID, TaskPatch{Done: ptr(true)})
+		got, err = r.PatchTask(ctx, u1, task.ID, TaskPatch{Done: ptr(true)})
 		if err != nil || !got.Done || got.DoneAt == nil {
 			t.Fatalf("done: %+v, %v", got, err)
 		}
-		got, err = r.PatchTask(ctx, task.ID, TaskPatch{Done: ptr(false)})
+		got, err = r.PatchTask(ctx, u1, task.ID, TaskPatch{Done: ptr(false)})
 		if err != nil || got.Done || got.DoneAt != nil {
 			t.Fatalf("undone: %+v, %v", got, err)
 		}
@@ -191,11 +364,11 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 
 		// null в полях-указателях (не датах) тоже доходит до базы как NULL
-		p, _ := r.CreateProject(ctx, "p", "#000000")
-		if _, err := r.PatchTask(ctx, task.ID, TaskPatch{ProjectID: model.Opt[int]{Set: true, Value: &p.ID}}); err != nil {
+		p, _ := r.CreateProject(ctx, u1, "p", "#000000")
+		if _, err := r.PatchTask(ctx, u1, task.ID, TaskPatch{ProjectID: model.Opt[int]{Set: true, Value: &p.ID}}); err != nil {
 			t.Fatal(err)
 		}
-		got, err = r.PatchTask(ctx, task.ID, TaskPatch{
+		got, err = r.PatchTask(ctx, u1, task.ID, TaskPatch{
 			ProjectID: model.Opt[int]{Set: true},
 			Note:      model.Opt[string]{Set: true},
 		})
@@ -203,7 +376,7 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 			t.Fatalf("null project_id/note: %+v, %v", got, err)
 		}
 
-		if _, err := r.PatchTask(ctx, 9999, TaskPatch{Title: ptr("y")}); err != model.ErrNotFound {
+		if _, err := r.PatchTask(ctx, u1, 9999, TaskPatch{Title: ptr("y")}); err != model.ErrNotFound {
 			t.Fatalf("err = %v, want ErrNotFound", err)
 		}
 	})
@@ -217,14 +390,14 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		d := mustCreate(t, r, NewTask{Title: "snake_case в go"})
 		mustCreate(t, r, NewTask{Title: "докер внутри подзадачи", ParentID: &b.ID})
 		done := mustCreate(t, r, NewTask{Title: "докер-компоуз"})
-		if _, err := r.PatchTask(ctx, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
+		if _, err := r.PatchTask(ctx, u1, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
 			t.Fatal(err)
 		}
 		notDone, yes := false, true
 
 		find := func(q string, doneFilter *bool) []int {
 			t.Helper()
-			items, total, err := r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{Search: q, Done: doneFilter}})
+			items, total, err := r.ListTasks(ctx, u1, TaskQuery{Filter: TaskFilter{Search: q, Done: doneFilter}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -255,11 +428,11 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		if task.Repeat == nil || *task.Repeat != "daily" || task.Note == nil || *task.Note != "10 мин" {
 			t.Fatalf("create: repeat %v note %v", task.Repeat, task.Note)
 		}
-		got, err := r.PatchTask(ctx, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("weekly:1,4")}})
+		got, err := r.PatchTask(ctx, u1, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("weekly:1,4")}})
 		if err != nil || got.Repeat == nil || *got.Repeat != "weekly:1,4" {
 			t.Fatalf("patch repeat: %v, %v", got.Repeat, err)
 		}
-		got, err = r.PatchTask(ctx, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true}})
+		got, err = r.PatchTask(ctx, u1, task.ID, TaskPatch{Repeat: model.Opt[string]{Set: true}})
 		if err != nil || got.Repeat != nil {
 			t.Fatalf("null repeat: %v, %v", got.Repeat, err)
 		}
@@ -272,15 +445,15 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 	t.Run("subtasks follow parent", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()
-		p, _ := r.CreateProject(ctx, "a", "#000000")
+		p, _ := r.CreateProject(ctx, u1, "a", "#000000")
 		parent := mustCreate(t, r, NewTask{Title: "parent"})
 		s1 := mustCreate(t, r, NewTask{Title: "s1", ParentID: &parent.ID})
 		s2 := mustCreate(t, r, NewTask{Title: "s2", ParentID: &parent.ID})
 
-		if _, err := r.PatchTask(ctx, parent.ID, TaskPatch{ProjectID: model.Opt[int]{Set: true, Value: &p.ID}}); err != nil {
+		if _, err := r.PatchTask(ctx, u1, parent.ID, TaskPatch{ProjectID: model.Opt[int]{Set: true, Value: &p.ID}}); err != nil {
 			t.Fatal(err)
 		}
-		subs, err := r.Subtasks(ctx, parent.ID)
+		subs, err := r.Subtasks(ctx, u1, parent.ID)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -294,25 +467,25 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 
 		// удаление списка — задачи во «Входящие»
-		if err := r.DeleteProject(ctx, p.ID); err != nil {
+		if err := r.DeleteProject(ctx, u1, p.ID); err != nil {
 			t.Fatal(err)
 		}
-		got, _ := r.GetTask(ctx, parent.ID)
+		got, _ := r.GetTask(ctx, u1, parent.ID)
 		if got.ProjectID != nil {
 			t.Fatalf("project_id после удаления списка = %v", *got.ProjectID)
 		}
-		if err := r.DeleteProject(ctx, p.ID); err != model.ErrProjectNotFound {
+		if err := r.DeleteProject(ctx, u1, p.ID); err != model.ErrProjectNotFound {
 			t.Fatalf("повторное удаление: %v", err)
 		}
 
 		// удаление родителя — каскадом подзадачи
-		if err := r.DeleteTask(ctx, parent.ID); err != nil {
+		if err := r.DeleteTask(ctx, u1, parent.ID); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := r.GetTask(ctx, s1.ID); err != model.ErrNotFound {
+		if _, err := r.GetTask(ctx, u1, s1.ID); err != model.ErrNotFound {
 			t.Fatalf("подзадача пережила родителя: %v", err)
 		}
-		if err := r.DeleteTask(ctx, parent.ID); err != model.ErrNotFound {
+		if err := r.DeleteTask(ctx, u1, parent.ID); err != model.ErrNotFound {
 			t.Fatalf("повторное удаление: %v", err)
 		}
 	})
@@ -320,40 +493,40 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 	t.Run("reorder and plan", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()
-		p, _ := r.CreateProject(ctx, "a", "#000000")
+		p, _ := r.CreateProject(ctx, u1, "a", "#000000")
 		a := mustCreate(t, r, NewTask{Title: "a", ProjectID: &p.ID})
 		b := mustCreate(t, r, NewTask{Title: "b", ProjectID: &p.ID})
 		c := mustCreate(t, r, NewTask{Title: "c", ProjectID: &p.ID})
 		inbox := mustCreate(t, r, NewTask{Title: "inbox"})
 
 		// inbox не из scope — игнорируется
-		if err := r.ReorderTasks(ctx, TaskFilter{ProjectID: &p.ID}, []int{c.ID, inbox.ID, a.ID, b.ID}); err != nil {
+		if err := r.ReorderTasks(ctx, u1, TaskFilter{ProjectID: &p.ID}, []int{c.ID, inbox.ID, a.ID, b.ID}); err != nil {
 			t.Fatal(err)
 		}
-		items, _, _ := r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{ProjectID: &p.ID}})
+		items, _, _ := r.ListTasks(ctx, u1, TaskQuery{Filter: TaskFilter{ProjectID: &p.ID}})
 		if !slices.Equal(ids(items), []int{c.ID, a.ID, b.ID}) {
 			t.Fatalf("order = %v", ids(items))
 		}
-		got, _ := r.GetTask(ctx, inbox.ID)
+		got, _ := r.GetTask(ctx, u1, inbox.ID)
 		if got.Position != inbox.Position {
 			t.Fatalf("position задачи вне scope изменилась: %d → %d", inbox.Position, got.Position)
 		}
 
-		if err := r.PlanDay(ctx, d0, []int{a.ID, b.ID}, nil); err != nil {
+		if err := r.PlanDay(ctx, u1, d0, []int{a.ID, b.ID}, nil); err != nil {
 			t.Fatal(err)
 		}
 		// c не запланирована на d0 — remove её не трогает
-		if _, err := r.PatchTask(ctx, c.ID, TaskPatch{ScheduledFor: model.Opt[model.Date]{Set: true, Value: ptr(d0.AddDays(1))}}); err != nil {
+		if _, err := r.PatchTask(ctx, u1, c.ID, TaskPatch{ScheduledFor: model.Opt[model.Date]{Set: true, Value: ptr(d0.AddDays(1))}}); err != nil {
 			t.Fatal(err)
 		}
-		if err := r.PlanDay(ctx, d0, nil, []int{a.ID, c.ID}); err != nil {
+		if err := r.PlanDay(ctx, u1, d0, nil, []int{a.ID, c.ID}); err != nil {
 			t.Fatal(err)
 		}
-		items, _, _ = r.ListTasks(ctx, TaskQuery{Filter: TaskFilter{ScheduledOn: &d0}})
+		items, _, _ = r.ListTasks(ctx, u1, TaskQuery{Filter: TaskFilter{ScheduledOn: &d0}})
 		if !slices.Equal(ids(items), []int{b.ID}) {
 			t.Fatalf("planned = %v, want [%d]", ids(items), b.ID)
 		}
-		got, _ = r.GetTask(ctx, c.ID)
+		got, _ = r.GetTask(ctx, u1, c.ID)
 		if got.ScheduledFor == nil {
 			t.Fatal("remove снял день у задачи, запланированной на другой день")
 		}
@@ -362,27 +535,27 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 	t.Run("projects", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()
-		a, _ := r.CreateProject(ctx, "a", "#111111")
-		b, _ := r.CreateProject(ctx, "b", "#222222")
+		a, _ := r.CreateProject(ctx, u1, "a", "#111111")
+		b, _ := r.CreateProject(ctx, u1, "b", "#222222")
 		if b.Position <= a.Position {
 			t.Fatalf("новый список не в конце: %d <= %d", b.Position, a.Position)
 		}
-		if err := r.ReorderProjects(ctx, []int{b.ID, a.ID}); err != nil {
+		if err := r.ReorderProjects(ctx, u1, []int{b.ID, a.ID}); err != nil {
 			t.Fatal(err)
 		}
-		got, err := r.PatchProject(ctx, a.ID, ProjectPatch{Archived: ptr(true), Name: ptr("aa")})
+		got, err := r.PatchProject(ctx, u1, a.ID, ProjectPatch{Archived: ptr(true), Name: ptr("aa")})
 		if err != nil || !got.Archived || got.Name != "aa" || got.Color != "#111111" {
 			t.Fatalf("patch: %+v, %v", got, err)
 		}
-		active, _ := r.ListProjects(ctx, false, d0)
-		all, _ := r.ListProjects(ctx, true, d0)
+		active, _ := r.ListProjects(ctx, u1, false, d0)
+		all, _ := r.ListProjects(ctx, u1, true, d0)
 		if len(all) != len(active)+1 {
 			t.Fatalf("archived: active %d, all %d", len(active), len(all))
 		}
 		if slices.ContainsFunc(active, func(p model.Project) bool { return p.ID == a.ID }) {
 			t.Fatal("архивный список в выдаче по умолчанию")
 		}
-		if _, err := r.PatchProject(ctx, 9999, ProjectPatch{Name: ptr("x")}); err != model.ErrProjectNotFound {
+		if _, err := r.PatchProject(ctx, u1, 9999, ProjectPatch{Name: ptr("x")}); err != model.ErrProjectNotFound {
 			t.Fatalf("err = %v", err)
 		}
 	})
@@ -408,7 +581,7 @@ func TestPostgres_DoneActivityUsesAppTZ(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, err := r.DoneActivity(ctx, DateRange{From: d0, To: d0}, msk)
+	got, err := r.DoneActivity(ctx, u1, DateRange{From: d0, To: d0}, msk)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -421,9 +594,9 @@ func TestPostgres_DoneActivityUsesAppTZ(t *testing.T) {
 	fr := &FakeRepo{}
 	for _, at := range []string{"2026-09-20T22:30:00Z", "2026-09-21T20:59:00Z", "2026-09-21T21:00:00Z"} {
 		ts, _ := time.Parse(time.RFC3339, at)
-		fr.Tasks = append(fr.Tasks, model.Task{ID: len(fr.Tasks) + 1, Done: true, DoneAt: &ts})
+		fr.Tasks = append(fr.Tasks, model.Task{ID: len(fr.Tasks) + 1, UserID: u1, Done: true, DoneAt: &ts})
 	}
-	got, _ = fr.DoneActivity(ctx, DateRange{From: d0, To: d0}, msk)
+	got, _ = fr.DoneActivity(ctx, u1, DateRange{From: d0, To: d0}, msk)
 	if !slices.Equal(got, want) {
 		t.Fatalf("fake activity = %+v, want %+v", got, want)
 	}

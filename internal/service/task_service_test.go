@@ -26,6 +26,18 @@ func mustLoc(name string) *time.Location {
 
 func ptr[T any](v T) *T { return &v }
 
+// u1 — пользователь, от имени которого идут тесты сервиса (изоляцию пользователей проверяет контракт репозитория).
+const u1 = 1
+
+// own отдаёт u1 задачи, положенные в фейк напрямую (литералы в тестах без владельца).
+func own(repo *storage.FakeRepo) {
+	for i := range repo.Tasks {
+		if repo.Tasks[i].UserID == 0 {
+			repo.Tasks[i].UserID = u1
+		}
+	}
+}
+
 func newTaskService() (*TaskService, *storage.FakeRepo) {
 	repo := &storage.FakeRepo{}
 	return NewTaskService(repo, repo, msk), repo
@@ -33,7 +45,7 @@ func newTaskService() (*TaskService, *storage.FakeRepo) {
 
 func mustAdd(t *testing.T, s *TaskService, nt storage.NewTask) model.Task {
 	t.Helper()
-	task, err := s.Add(context.Background(), nt)
+	task, err := s.Add(context.Background(), u1, nt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -71,9 +83,9 @@ func TestValidateTitle(t *testing.T) {
 func TestAdd(t *testing.T) {
 	ctx := context.Background()
 	s, repo := newTaskService()
-	p, _ := repo.CreateProject(ctx, "go", "#6AA6FF")
+	p, _ := repo.CreateProject(ctx, u1, "go", "#6AA6FF")
 
-	task, err := s.Add(ctx, storage.NewTask{Title: "  задача  ", DueDate: &d0})
+	task, err := s.Add(ctx, u1, storage.NewTask{Title: "  задача  ", DueDate: &d0})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +112,7 @@ func TestAdd(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := s.Add(ctx, tc.in); !errors.Is(err, tc.err) {
+			if _, err := s.Add(ctx, u1, tc.in); !errors.Is(err, tc.err) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
 		})
@@ -113,7 +125,7 @@ func TestGet(t *testing.T) {
 	parent := mustAdd(t, s, storage.NewTask{Title: "parent"})
 	sub := mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &parent.ID})
 
-	got, err := s.Get(ctx, parent.ID)
+	got, err := s.Get(ctx, u1, parent.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +137,7 @@ func TestGet(t *testing.T) {
 		id  int
 		err error
 	}{{0, model.ErrInvalidID}, {-1, model.ErrInvalidID}, {999, model.ErrNotFound}} {
-		if _, err := s.Get(ctx, tc.id); !errors.Is(err, tc.err) {
+		if _, err := s.Get(ctx, u1, tc.id); !errors.Is(err, tc.err) {
 			t.Fatalf("Get(%d) err = %v, want %v", tc.id, err, tc.err)
 		}
 	}
@@ -134,17 +146,17 @@ func TestGet(t *testing.T) {
 func TestPatch(t *testing.T) {
 	ctx := context.Background()
 	s, repo := newTaskService()
-	p, _ := repo.CreateProject(ctx, "go", "#6AA6FF")
+	p, _ := repo.CreateProject(ctx, u1, "go", "#6AA6FF")
 	task := mustAdd(t, s, storage.NewTask{Title: "task", DueDate: &d0})
 
 	t.Run("title trimmed", func(t *testing.T) {
-		got, err := s.Patch(ctx, task.ID, storage.TaskPatch{Title: ptr("  new  ")})
+		got, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Title: ptr("  new  ")})
 		if err != nil || got.Title != "new" {
 			t.Fatalf("title = %q, %v", got.Title, err)
 		}
 	})
 	t.Run("null clears, absent keeps", func(t *testing.T) {
-		got, err := s.Patch(ctx, task.ID, storage.TaskPatch{
+		got, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{
 			DueDate:      model.Opt[model.Date]{Set: true},
 			ScheduledFor: model.Opt[model.Date]{Set: true, Value: &d0},
 		})
@@ -153,18 +165,18 @@ func TestPatch(t *testing.T) {
 		}
 	})
 	t.Run("done then already done", func(t *testing.T) {
-		got, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)})
+		got, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(true)})
 		if err != nil || !got.Done || got.DoneAt == nil {
 			t.Fatalf("done: %+v, %v", got, err)
 		}
-		if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)}); !errors.Is(err, model.ErrAlreadyDone) {
+		if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(true)}); !errors.Is(err, model.ErrAlreadyDone) {
 			t.Fatalf("err = %v, want ErrAlreadyDone", err)
 		}
-		got, err = s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(false)})
+		got, err = s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(false)})
 		if err != nil || got.Done || got.DoneAt != nil {
 			t.Fatalf("undone: %+v, %v", got, err)
 		}
-		if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(false)}); !errors.Is(err, model.ErrAlreadyUndone) {
+		if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(false)}); !errors.Is(err, model.ErrAlreadyUndone) {
 			t.Fatalf("err = %v, want ErrAlreadyUndone", err)
 		}
 	})
@@ -174,12 +186,12 @@ func TestPatch(t *testing.T) {
 	loose := mustAdd(t, s, storage.NewTask{Title: "loose"})
 
 	t.Run("parent inherits project", func(t *testing.T) {
-		got, err := s.Patch(ctx, loose.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true, Value: &parent.ID}})
+		got, err := s.Patch(ctx, u1, loose.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true, Value: &parent.ID}})
 		if err != nil || got.ParentID == nil || *got.ParentID != parent.ID || got.ProjectID == nil || *got.ProjectID != p.ID {
 			t.Fatalf("got %+v, %v", got, err)
 		}
 		// отцепить обратно — снова корневая, список остаётся
-		got, err = s.Patch(ctx, loose.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true}})
+		got, err = s.Patch(ctx, u1, loose.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true}})
 		if err != nil || got.ParentID != nil || got.ProjectID == nil {
 			t.Fatalf("detach: %+v, %v", got, err)
 		}
@@ -208,7 +220,7 @@ func TestPatch(t *testing.T) {
 	}
 	for _, tc := range errCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := s.Patch(ctx, tc.id, tc.patch); !errors.Is(err, tc.err) {
+			if _, err := s.Patch(ctx, u1, tc.id, tc.patch); !errors.Is(err, tc.err) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
 		})
@@ -231,7 +243,7 @@ func TestDelete(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := s.Delete(ctx, tt.id); !errors.Is(err, tt.err) {
+			if err := s.Delete(ctx, u1, tt.id); !errors.Is(err, tt.err) {
 				t.Fatalf("err = %v, want %v", err, tt.err)
 			}
 		})
@@ -241,7 +253,7 @@ func TestDelete(t *testing.T) {
 func TestList_Views(t *testing.T) {
 	ctx := context.Background()
 	s, repo := newTaskService()
-	p, _ := repo.CreateProject(ctx, "go", "#6AA6FF")
+	p, _ := repo.CreateProject(ctx, u1, "go", "#6AA6FF")
 
 	today := mustAdd(t, s, storage.NewTask{Title: "today", ScheduledFor: &d0, ProjectID: &p.ID})
 	overdue := mustAdd(t, s, storage.NewTask{Title: "overdue", DueDate: ptr(d0.AddDays(-1))})
@@ -251,7 +263,7 @@ func TestList_Views(t *testing.T) {
 	done2 := mustAdd(t, s, storage.NewTask{Title: "done2"})
 	mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &today.ID, ScheduledFor: &d0})
 	for _, id := range []int{done1.ID, done2.ID} {
-		if _, err := s.Patch(ctx, id, storage.TaskPatch{Done: ptr(true)}); err != nil {
+		if _, err := s.Patch(ctx, u1, id, storage.TaskPatch{Done: ptr(true)}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -280,7 +292,7 @@ func TestList_Views(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			items, total, err := s.List(ctx, tt.q)
+			items, total, err := s.List(ctx, u1, tt.q)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -294,7 +306,7 @@ func TestList_Views(t *testing.T) {
 	}
 
 	t.Run("total before pagination", func(t *testing.T) {
-		_, total, err := s.List(ctx, ListQuery{Limit: 1})
+		_, total, err := s.List(ctx, u1, ListQuery{Limit: 1})
 		if err != nil || total != 4 {
 			t.Fatalf("total = %d, %v; want 4", total, err)
 		}
@@ -308,11 +320,11 @@ func TestCounts(t *testing.T) {
 	mustAdd(t, s, storage.NewTask{Title: "overdue", DueDate: ptr(d0.AddDays(-1))})
 	mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &today.ID, ScheduledFor: &d0})
 	done := mustAdd(t, s, storage.NewTask{Title: "done", ScheduledFor: &d0})
-	if _, err := s.Patch(ctx, done.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
+	if _, err := s.Patch(ctx, u1, done.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := s.Counts(ctx, &d0)
+	got, err := s.Counts(ctx, u1, &d0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -321,7 +333,7 @@ func TestCounts(t *testing.T) {
 		if got[v] != want[v] {
 			t.Fatalf("counts = %v, want %v", got, want)
 		}
-		_, total, err := s.List(ctx, ListQuery{View: v, Today: &d0})
+		_, total, err := s.List(ctx, u1, ListQuery{View: v, Today: &d0})
 		if err != nil || total != got[v] {
 			t.Fatalf("%s: counts %d, List total %d (%v)", v, got[v], total, err)
 		}
@@ -347,7 +359,7 @@ func TestList_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, _, err := s.List(context.Background(), tt.q); !errors.Is(err, tt.err) {
+			if _, _, err := s.List(context.Background(), u1, tt.q); !errors.Is(err, tt.err) {
 				t.Fatalf("err = %v, want %v", err, tt.err)
 			}
 		})
@@ -359,15 +371,15 @@ func TestList_ArchiveIsPaged(t *testing.T) {
 	s, _ := newTaskService()
 	for range archiveLimit + 5 {
 		task := mustAdd(t, s, storage.NewTask{Title: "x"})
-		if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
+		if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	items, total, err := s.List(ctx, ListQuery{View: "archive"})
+	items, total, err := s.List(ctx, u1, ListQuery{View: "archive"})
 	if err != nil || len(items) != archiveLimit || total != archiveLimit+5 {
 		t.Fatalf("len = %d, total = %d, %v", len(items), total, err)
 	}
-	items, _, _ = s.List(ctx, ListQuery{View: "archive", Limit: 1000})
+	items, _, _ = s.List(ctx, u1, ListQuery{View: "archive", Limit: 1000})
 	if len(items) != archiveLimit+5 {
 		t.Fatalf("limit 1000 → %d задач", len(items))
 	}
@@ -381,10 +393,10 @@ func TestReorder(t *testing.T) {
 	c := mustAdd(t, s, storage.NewTask{Title: "c"})
 
 	// повтор id не сбивает порядок: берётся первое вхождение
-	if err := s.Reorder(ctx, ReorderScope{Type: "day", Date: &d0}, []int{b.ID, c.ID, b.ID, a.ID}); err != nil {
+	if err := s.Reorder(ctx, u1, ReorderScope{Type: "day", Date: &d0}, []int{b.ID, c.ID, b.ID, a.ID}); err != nil {
 		t.Fatal(err)
 	}
-	items, _, _ := s.List(ctx, ListQuery{View: "today", Today: &d0})
+	items, _, _ := s.List(ctx, u1, ListQuery{View: "today", Today: &d0})
 	if got := taskIDs(items); !slices.Equal(got, []int{b.ID, a.ID}) {
 		t.Fatalf("order = %v", got)
 	}
@@ -393,11 +405,11 @@ func TestReorder(t *testing.T) {
 	}
 
 	for _, scope := range []ReorderScope{{Type: "week"}, {Type: "project"}, {Type: "day"}} {
-		if err := s.Reorder(ctx, scope, []int{a.ID}); !errors.Is(err, model.ErrInvalidBody) {
+		if err := s.Reorder(ctx, u1, scope, []int{a.ID}); !errors.Is(err, model.ErrInvalidBody) {
 			t.Fatalf("scope %+v: err = %v", scope, err)
 		}
 	}
-	if err := s.Reorder(ctx, ReorderScope{Type: "inbox"}, nil); err != nil {
+	if err := s.Reorder(ctx, u1, ReorderScope{Type: "inbox"}, nil); err != nil {
 		t.Fatalf("пустой ids: %v", err)
 	}
 }
@@ -416,14 +428,15 @@ func TestActivity(t *testing.T) {
 		{ID: 4, Done: false},
 		{ID: 5, Done: true, ParentID: ptr(2), DoneAt: at("2026-09-21T11:00:00Z")}, // подзадачи не считаются
 	}
-	got, err := s.Activity(ctx, nil, &d0)
+	own(repo)
+	got, err := s.Activity(ctx, u1, nil, &d0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := []model.DayCount{{Date: d0, Done: 2}}; !slices.Equal(got, want) {
 		t.Fatalf("activity = %+v, want %+v", got, want)
 	}
-	if _, err := s.Activity(ctx, ptr(d0.AddDays(1)), &d0); !errors.Is(err, model.ErrInvalidQuery) {
+	if _, err := s.Activity(ctx, u1, ptr(d0.AddDays(1)), &d0); !errors.Is(err, model.ErrInvalidQuery) {
 		t.Fatalf("from > to: %v", err)
 	}
 }
@@ -471,18 +484,18 @@ func TestRepeatOnDone(t *testing.T) {
 	ctx := context.Background()
 	s, repo := newTaskService()
 	today := model.Today(msk)
-	proj, _ := repo.CreateProject(ctx, "Go", "#6AA6FF")
+	proj, _ := repo.CreateProject(ctx, u1, "Go", "#6AA6FF")
 	task := mustAdd(t, s, storage.NewTask{
 		Title: "зарядка", Priority: "high", ProjectID: &proj.ID, ScheduledFor: &today, Repeat: ptr(" weekly:5,1 "),
 	})
 	if task.Repeat == nil || *task.Repeat != "weekly:1,5" {
 		t.Fatalf("правило не приведено к канону: %v", task.Repeat)
 	}
-	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Note: model.Opt[string]{Set: true, Value: ptr("10 мин")}}); err != nil {
+	if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Note: model.Opt[string]{Set: true, Value: ptr("10 мин")}}); err != nil {
 		t.Fatal(err)
 	}
 
-	done, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)})
+	done, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -502,10 +515,10 @@ func TestRepeatOnDone(t *testing.T) {
 	}
 
 	// сняли галочку — обычная задача, второй копии нет; снова выполнили — тоже нет
-	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(false)}); err != nil {
+	if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(false)}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Patch(ctx, task.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
+	if _, err := s.Patch(ctx, u1, task.ID, storage.TaskPatch{Done: ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
 	if len(repo.Tasks) != 2 {
@@ -516,25 +529,25 @@ func TestRepeatOnDone(t *testing.T) {
 func TestRepeatValidation(t *testing.T) {
 	ctx := context.Background()
 	s, _ := newTaskService()
-	if _, err := s.Add(ctx, storage.NewTask{Title: "x", Repeat: ptr("hourly")}); !errors.Is(err, model.ErrInvalidRepeat) {
+	if _, err := s.Add(ctx, u1, storage.NewTask{Title: "x", Repeat: ptr("hourly")}); !errors.Is(err, model.ErrInvalidRepeat) {
 		t.Fatalf("плохое правило: %v", err)
 	}
 	parent := mustAdd(t, s, storage.NewTask{Title: "p"})
-	if _, err := s.Add(ctx, storage.NewTask{Title: "sub", ParentID: &parent.ID, Repeat: ptr("daily")}); !errors.Is(err, model.ErrInvalidRepeat) {
+	if _, err := s.Add(ctx, u1, storage.NewTask{Title: "sub", ParentID: &parent.ID, Repeat: ptr("daily")}); !errors.Is(err, model.ErrInvalidRepeat) {
 		t.Fatalf("подзадача с повтором: %v", err)
 	}
 	sub := mustAdd(t, s, storage.NewTask{Title: "sub", ParentID: &parent.ID})
-	if _, err := s.Patch(ctx, sub.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("daily")}}); !errors.Is(err, model.ErrInvalidRepeat) {
+	if _, err := s.Patch(ctx, u1, sub.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("daily")}}); !errors.Is(err, model.ErrInvalidRepeat) {
 		t.Fatalf("повтор подзадаче: %v", err)
 	}
 	rep := mustAdd(t, s, storage.NewTask{Title: "r", Repeat: ptr("daily")})
-	if _, err := s.Patch(ctx, rep.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true, Value: &parent.ID}}); !errors.Is(err, model.ErrInvalidRepeat) {
+	if _, err := s.Patch(ctx, u1, rep.ID, storage.TaskPatch{ParentID: model.Opt[int]{Set: true, Value: &parent.ID}}); !errors.Is(err, model.ErrInvalidRepeat) {
 		t.Fatalf("повторяющуюся в подзадачи: %v", err)
 	}
-	if _, err := s.Patch(ctx, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("monthly:40")}}); !errors.Is(err, model.ErrInvalidRepeat) {
+	if _, err := s.Patch(ctx, u1, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true, Value: ptr("monthly:40")}}); !errors.Is(err, model.ErrInvalidRepeat) {
 		t.Fatalf("monthly:40: %v", err)
 	}
-	got, err := s.Patch(ctx, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true}})
+	got, err := s.Patch(ctx, u1, rep.ID, storage.TaskPatch{Repeat: model.Opt[string]{Set: true}})
 	if err != nil || got.Repeat != nil {
 		t.Fatalf("снять повтор: %v, %v", got.Repeat, err)
 	}

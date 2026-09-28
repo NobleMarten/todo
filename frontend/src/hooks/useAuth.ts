@@ -6,16 +6,28 @@ import { forgetCache } from '../lib/cachePersist'
 
 export type AuthState = 'checking' | 'in' | 'out'
 
-/** Вход по паролю (APP_PASSWORD на бэкенде). Любой 401 UNAUTHORIZED из API переводит в 'out'. */
+/** Задачи прошлого пользователя не должны пережить смену пользователя ни в памяти, ни в хранилище. */
+function dropCache() {
+  try {
+    forgetCache(cache, window.localStorage)
+  } catch {
+    forgetCache(cache, null)
+  }
+}
+
+/**
+ * Вход по логину и паролю; у каждого пользователя свои задачи. Любой 401 UNAUTHORIZED из API
+ * (сессия истекла или закрыта сменой пароля) переводит в 'out'. login — кто вошёл (null — неизвестно).
+ */
 export function useAuth() {
   const [state, setState] = useState<AuthState>('checking')
-  const [enabled, setEnabled] = useState(false)
+  const [user, setUser] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
     getAuthStatus().then((s) => {
       if (cancelled) return
-      setEnabled(s.enabled)
+      setUser(s.login)
       setState(s.authed ? 'in' : 'out')
     })
     return () => {
@@ -23,30 +35,22 @@ export function useAuth() {
     }
   }, [])
 
-  useEffect(
-    () =>
-      onUnauthorized(() => {
-        setEnabled(true)
-        setState('out')
-      }),
-    [],
-  )
+  useEffect(() => onUnauthorized(() => setState('out')), [])
 
-  const login = useCallback(async (password: string) => {
-    await apiLogin(password)
+  const login = useCallback(async (loginName: string, password: string) => {
+    const who = await apiLogin(loginName, password)
+    // на этом устройстве мог сидеть другой пользователь: его кэш не показываем ни на миг
+    dropCache()
+    setUser(who)
     setState('in')
   }, [])
 
   const logout = useCallback(async () => {
     await apiLogout().catch(() => {})
-    // задачи не должны пережить выход ни в памяти, ни в хранилище
-    try {
-      forgetCache(cache, window.localStorage)
-    } catch {
-      forgetCache(cache, null)
-    }
+    dropCache()
+    setUser(null)
     setState('out')
   }, [])
 
-  return { state, enabled, login, logout }
+  return { state, user, login, logout }
 }

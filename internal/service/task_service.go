@@ -74,7 +74,7 @@ func uniqueIDs(ids []int) []int {
 }
 
 // Add создаёт задачу. Подзадача всегда живёт в списке родителя, присланный project_id игнорируется.
-func (s *TaskService) Add(ctx context.Context, nt storage.NewTask) (model.Task, error) {
+func (s *TaskService) Add(ctx context.Context, userID int, nt storage.NewTask) (model.Task, error) {
 	title, err := ValidateTitle(nt.Title)
 	if err != nil {
 		return model.Task{}, err
@@ -101,7 +101,7 @@ func (s *TaskService) Add(ctx context.Context, nt storage.NewTask) (model.Task, 
 	}
 
 	if nt.ParentID != nil {
-		parent, err := s.getParent(ctx, *nt.ParentID)
+		parent, err := s.getParent(ctx, userID, *nt.ParentID)
 		if err != nil {
 			return model.Task{}, err
 		}
@@ -110,51 +110,51 @@ func (s *TaskService) Add(ctx context.Context, nt storage.NewTask) (model.Task, 
 		}
 		nt.ProjectID = parent.ProjectID
 	} else if nt.ProjectID != nil {
-		if err := s.checkProject(ctx, *nt.ProjectID); err != nil {
+		if err := s.checkProject(ctx, userID, *nt.ProjectID); err != nil {
 			return model.Task{}, err
 		}
 	}
 
-	return s.tasks.CreateTask(ctx, nt)
+	return s.tasks.CreateTask(ctx, userID, nt)
 }
 
 // getParent — будущий родитель; в сообщении видно, что не нашёлся именно он, а не сама задача.
-func (s *TaskService) getParent(ctx context.Context, id int) (model.Task, error) {
+func (s *TaskService) getParent(ctx context.Context, userID int, id int) (model.Task, error) {
 	if !validID(id) {
 		return model.Task{}, fmt.Errorf("parent: %w", model.ErrInvalidID)
 	}
-	parent, err := s.tasks.GetTask(ctx, id)
+	parent, err := s.tasks.GetTask(ctx, userID, id)
 	if err != nil {
 		return model.Task{}, fmt.Errorf("parent %d: %w", id, err)
 	}
 	return parent, nil
 }
 
-func (s *TaskService) checkProject(ctx context.Context, id int) error {
+func (s *TaskService) checkProject(ctx context.Context, userID int, id int) error {
 	if !validID(id) {
 		return fmt.Errorf("%w: project %d", model.ErrProjectNotFound, id)
 	}
-	_, err := s.projects.GetProject(ctx, id)
+	_, err := s.projects.GetProject(ctx, userID, id)
 	return err
 }
 
 // Get отдаёт задачу вместе с полным списком подзадач.
-func (s *TaskService) Get(ctx context.Context, id int) (model.Task, error) {
+func (s *TaskService) Get(ctx context.Context, userID int, id int) (model.Task, error) {
 	if !validID(id) {
 		return model.Task{}, model.ErrInvalidID
 	}
-	task, err := s.tasks.GetTask(ctx, id)
+	task, err := s.tasks.GetTask(ctx, userID, id)
 	if err != nil {
 		return model.Task{}, err
 	}
-	task.Subtasks, err = s.tasks.Subtasks(ctx, id)
+	task.Subtasks, err = s.tasks.Subtasks(ctx, userID, id)
 	if err != nil {
 		return model.Task{}, err
 	}
 	return task, nil
 }
 
-func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (model.Task, error) {
+func (s *TaskService) Patch(ctx context.Context, userID int, id int, p storage.TaskPatch) (model.Task, error) {
 	if !validID(id) {
 		return model.Task{}, model.ErrInvalidID
 	}
@@ -182,7 +182,7 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 		p.Repeat.Value = &canon
 	}
 
-	current, err := s.tasks.GetTask(ctx, id)
+	current, err := s.tasks.GetTask(ctx, userID, id)
 	if err != nil {
 		return model.Task{}, err
 	}
@@ -201,7 +201,7 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 		return model.Task{}, fmt.Errorf("%w: subtask follows its parent's project", model.ErrInvalidBody)
 	}
 	if p.ProjectID.Set && p.ProjectID.Value != nil {
-		if err := s.checkProject(ctx, *p.ProjectID.Value); err != nil {
+		if err := s.checkProject(ctx, userID, *p.ProjectID.Value); err != nil {
 			return model.Task{}, err
 		}
 	}
@@ -212,7 +212,7 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 		if parentID == id || (current.SubtaskStats != nil && current.SubtaskStats.Total > 0) {
 			return model.Task{}, model.ErrSubtaskTooDeep
 		}
-		parent, err := s.getParent(ctx, parentID)
+		parent, err := s.getParent(ctx, userID, parentID)
 		if err != nil {
 			return model.Task{}, err
 		}
@@ -240,14 +240,14 @@ func (s *TaskService) Patch(ctx context.Context, id int, p storage.TaskPatch) (m
 	if p.Done != nil && *p.Done && repeat != nil {
 		p.Repeat = model.Opt[string]{Set: true}
 	}
-	done, err := s.tasks.PatchTask(ctx, id, p)
+	done, err := s.tasks.PatchTask(ctx, userID, id, p)
 	if err != nil {
 		return model.Task{}, err
 	}
 	if p.Done != nil && *p.Done && repeat != nil {
-		if err := s.spawnNext(ctx, done, *repeat); err != nil {
+		if err := s.spawnNext(ctx, userID, done, *repeat); err != nil {
 			// следующая не создалась — откатываем выполнение, чтобы правило не потерялось
-			_, _ = s.tasks.PatchTask(ctx, id, storage.TaskPatch{
+			_, _ = s.tasks.PatchTask(ctx, userID, id, storage.TaskPatch{
 				Done:   ptrTo(false),
 				Repeat: model.Opt[string]{Set: true, Value: repeat},
 			})
@@ -291,13 +291,13 @@ func nextDates(t model.Task, rule model.Repeat, today model.Date) (scheduled, du
 }
 
 // spawnNext создаёт следующую копию выполненной повторяющейся задачи (без подзадач).
-func (s *TaskService) spawnNext(ctx context.Context, done model.Task, repeat string) error {
+func (s *TaskService) spawnNext(ctx context.Context, userID int, done model.Task, repeat string) error {
 	rule, err := model.ParseRepeat(repeat)
 	if err != nil {
 		return err
 	}
 	scheduled, due := nextDates(done, rule, model.Today(s.loc))
-	_, err = s.tasks.CreateTask(ctx, storage.NewTask{
+	_, err = s.tasks.CreateTask(ctx, userID, storage.NewTask{
 		Title:        done.Title,
 		Priority:     done.Priority,
 		ProjectID:    done.ProjectID,
@@ -309,11 +309,11 @@ func (s *TaskService) spawnNext(ctx context.Context, done model.Task, repeat str
 	return err
 }
 
-func (s *TaskService) Delete(ctx context.Context, id int) error {
+func (s *TaskService) Delete(ctx context.Context, userID int, id int) error {
 	if !validID(id) {
 		return model.ErrInvalidID
 	}
-	return s.tasks.DeleteTask(ctx, id)
+	return s.tasks.DeleteTask(ctx, userID, id)
 }
 
 // ListQuery — разобранные параметры GET /tasks. Пустые строки и nil — «не задано».
@@ -341,7 +341,7 @@ var sortFields = map[string]storage.SortField{
 }
 
 // List собирает вьюху в набор условий фильтра; сама выборка — в SQL.
-func (s *TaskService) List(ctx context.Context, q ListQuery) ([]model.Task, int, error) {
+func (s *TaskService) List(ctx context.Context, userID int, q ListQuery) ([]model.Task, int, error) {
 	today := dateOrToday(q.Today, s.loc)
 	notDone := false
 	query := storage.TaskQuery{Filter: storage.TaskFilter{Done: &notDone}}
@@ -361,7 +361,7 @@ func (s *TaskService) List(ctx context.Context, q ListQuery) ([]model.Task, int,
 		if q.ProjectID == nil {
 			return nil, 0, fmt.Errorf("%w: view=project requires project_id", model.ErrInvalidQuery)
 		}
-		if err := s.checkProject(ctx, *q.ProjectID); err != nil {
+		if err := s.checkProject(ctx, userID, *q.ProjectID); err != nil {
 			return nil, 0, err
 		}
 	case "archive":
@@ -432,7 +432,7 @@ func (s *TaskService) List(ctx context.Context, q ListQuery) ([]model.Task, int,
 	}
 	query.Offset = q.Offset
 
-	return s.tasks.ListTasks(ctx, query)
+	return s.tasks.ListTasks(ctx, userID, query)
 }
 
 // CountViews — смарт-виды, у которых экран «Списки» показывает счётчики.
@@ -440,10 +440,10 @@ var CountViews = []string{"today", "week", "overdue", "all", "inbox"}
 
 // Counts — число задач в каждом из CountViews (как total у GET /tasks?view=…) одним вызовом:
 // экран «Списки» делал пять запросов с limit=1.
-func (s *TaskService) Counts(ctx context.Context, today *model.Date) (map[string]int, error) {
+func (s *TaskService) Counts(ctx context.Context, userID int, today *model.Date) (map[string]int, error) {
 	counts := make(map[string]int, len(CountViews))
 	for _, v := range CountViews {
-		_, total, err := s.List(ctx, ListQuery{View: v, Today: today, Limit: 1})
+		_, total, err := s.List(ctx, userID, ListQuery{View: v, Today: today, Limit: 1})
 		if err != nil {
 			return nil, err
 		}
@@ -459,7 +459,7 @@ type ReorderScope struct {
 	Date      *model.Date `json:"date"`
 }
 
-func (s *TaskService) Reorder(ctx context.Context, scope ReorderScope, ids []int) error {
+func (s *TaskService) Reorder(ctx context.Context, userID int, scope ReorderScope, ids []int) error {
 	var f storage.TaskFilter
 	switch scope.Type {
 	case "project":
@@ -482,11 +482,11 @@ func (s *TaskService) Reorder(ctx context.Context, scope ReorderScope, ids []int
 	if len(ids) == 0 {
 		return nil
 	}
-	return s.tasks.ReorderTasks(ctx, f, ids)
+	return s.tasks.ReorderTasks(ctx, userID, f, ids)
 }
 
 // Activity — выполненные задачи по дням для грида. По умолчанию — последний год до сегодня.
-func (s *TaskService) Activity(ctx context.Context, from, to *model.Date) ([]model.DayCount, error) {
+func (s *TaskService) Activity(ctx context.Context, userID int, from, to *model.Date) ([]model.DayCount, error) {
 	end := dateOrToday(to, s.loc)
 	start := end.AddDays(-(activityDaysDefault - 1))
 	if from != nil {
@@ -495,5 +495,5 @@ func (s *TaskService) Activity(ctx context.Context, from, to *model.Date) ([]mod
 	if start.After(end) {
 		return nil, fmt.Errorf("%w: from after to", model.ErrInvalidQuery)
 	}
-	return s.tasks.DoneActivity(ctx, storage.DateRange{From: start, To: end}, s.loc)
+	return s.tasks.DoneActivity(ctx, userID, storage.DateRange{From: start, To: end}, s.loc)
 }

@@ -46,36 +46,36 @@ type Suggestions struct {
 	Stale   []model.Task `json:"stale"`
 }
 
-func (s *DayService) list(ctx context.Context, q storage.TaskQuery) ([]model.Task, error) {
-	items, _, err := s.tasks.ListTasks(ctx, q)
+func (s *DayService) list(ctx context.Context, userID int, q storage.TaskQuery) ([]model.Task, error) {
+	items, _, err := s.tasks.ListTasks(ctx, userID, q)
 	return items, err
 }
 
-func (s *DayService) Day(ctx context.Context, date *model.Date) (Day, error) {
+func (s *DayService) Day(ctx context.Context, userID int, date *model.Date) (Day, error) {
 	d := dateOrToday(date, s.loc)
 	notDone, done := false, true
 
-	planned, err := s.list(ctx, storage.TaskQuery{
+	planned, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, ScheduledOn: &d},
 	})
 	if err != nil {
 		return Day{}, err
 	}
-	overdue, err := s.list(ctx, storage.TaskQuery{
+	overdue, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, DueBefore: &d},
 		Sort:   storage.SortDueDate,
 	})
 	if err != nil {
 		return Day{}, err
 	}
-	carry, err := s.list(ctx, storage.TaskQuery{
+	carry, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, ScheduledBefore: &d},
 		Sort:   storage.SortScheduledFor,
 	})
 	if err != nil {
 		return Day{}, err
 	}
-	doneToday, err := s.list(ctx, storage.TaskQuery{
+	doneToday, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &done, DoneBetween: &storage.TimeRange{
 			From: d.Time(s.loc), To: d.AddDays(1).Time(s.loc),
 		}},
@@ -109,20 +109,20 @@ func (s *DayService) Day(ctx context.Context, date *model.Date) (Day, error) {
 }
 
 // Suggestions — материал для «Собрать день». Уже запланированное на date не предлагается.
-func (s *DayService) Suggestions(ctx context.Context, date *model.Date) (Suggestions, error) {
+func (s *DayService) Suggestions(ctx context.Context, userID int, date *model.Date) (Suggestions, error) {
 	d := dateOrToday(date, s.loc)
 	notDone := false
 	var out Suggestions
 	var err error
 
-	out.Overdue, err = s.list(ctx, storage.TaskQuery{
+	out.Overdue, err = s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, DueBefore: &d, NotScheduledOn: &d},
 		Sort:   storage.SortDueDate,
 	})
 	if err != nil {
 		return Suggestions{}, err
 	}
-	out.DueSoon, err = s.list(ctx, storage.TaskQuery{
+	out.DueSoon, err = s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{
 			Done:           &notDone,
 			DueBetween:     &storage.DateRange{From: d, To: d.AddDays(dueSoonDays)},
@@ -135,7 +135,7 @@ func (s *DayService) Suggestions(ctx context.Context, date *model.Date) (Suggest
 	}
 	// «не трогали 14 дней» отсчитываем от начала выбранного дня, а не от текущего момента
 	staleBefore := d.AddDays(-staleDays).Time(s.loc)
-	out.Stale, err = s.list(ctx, storage.TaskQuery{
+	out.Stale, err = s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, NoDates: true, UpdatedBefore: &staleBefore},
 		Sort:   storage.SortUpdatedAt,
 		Limit:  staleLimit,
@@ -147,9 +147,9 @@ func (s *DayService) Suggestions(ctx context.Context, date *model.Date) (Suggest
 }
 
 // Plan одним запросом добавляет задачи в день и убирает из него.
-func (s *DayService) Plan(ctx context.Context, date model.Date, add, remove []int) error {
+func (s *DayService) Plan(ctx context.Context, userID int, date model.Date, add, remove []int) error {
 	if date.IsZero() {
 		return fmt.Errorf("%w: date is required", model.ErrInvalidBody)
 	}
-	return s.tasks.PlanDay(ctx, date, uniqueIDs(add), uniqueIDs(remove))
+	return s.tasks.PlanDay(ctx, userID, date, uniqueIDs(add), uniqueIDs(remove))
 }

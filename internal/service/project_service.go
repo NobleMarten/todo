@@ -45,11 +45,11 @@ func validateColor(color string) error {
 }
 
 // List отдаёт списки со счётчиками; today нужен, чтобы посчитать просроченные.
-func (s *ProjectService) List(ctx context.Context, includeArchived bool, today *model.Date) ([]model.Project, error) {
-	return s.repo.ListProjects(ctx, includeArchived, dateOrToday(today, s.loc))
+func (s *ProjectService) List(ctx context.Context, userID int, includeArchived bool, today *model.Date) ([]model.Project, error) {
+	return s.repo.ListProjects(ctx, userID, includeArchived, dateOrToday(today, s.loc))
 }
 
-func (s *ProjectService) Create(ctx context.Context, name, color string) (model.Project, error) {
+func (s *ProjectService) Create(ctx context.Context, userID int, name, color string) (model.Project, error) {
 	name, err := validateName(name)
 	if err != nil {
 		return model.Project{}, err
@@ -60,10 +60,10 @@ func (s *ProjectService) Create(ctx context.Context, name, color string) (model.
 	if err := validateColor(color); err != nil {
 		return model.Project{}, err
 	}
-	return s.repo.CreateProject(ctx, name, color)
+	return s.repo.CreateProject(ctx, userID, name, color)
 }
 
-func (s *ProjectService) Patch(ctx context.Context, id int, p storage.ProjectPatch) (model.Project, error) {
+func (s *ProjectService) Patch(ctx context.Context, userID int, id int, p storage.ProjectPatch) (model.Project, error) {
 	if !validID(id) {
 		return model.Project{}, model.ErrInvalidID
 	}
@@ -82,20 +82,20 @@ func (s *ProjectService) Patch(ctx context.Context, id int, p storage.ProjectPat
 			return model.Project{}, err
 		}
 	}
-	return s.repo.PatchProject(ctx, id, p)
+	return s.repo.PatchProject(ctx, userID, id, p)
 }
 
-func (s *ProjectService) Delete(ctx context.Context, id int) error {
+func (s *ProjectService) Delete(ctx context.Context, userID int, id int) error {
 	if !validID(id) {
 		return model.ErrInvalidID
 	}
-	return s.repo.DeleteProject(ctx, id)
+	return s.repo.DeleteProject(ctx, userID, id)
 }
 
-func (s *ProjectService) Reorder(ctx context.Context, ids []int) error {
+func (s *ProjectService) Reorder(ctx context.Context, userID int, ids []int) error {
 	ids = uniqueIDs(ids)
 	if len(ids) == 0 {
 		return nil
 	}
-	return s.repo.ReorderProjects(ctx, ids)
+	return s.repo.ReorderProjects(ctx, userID, ids)
 }

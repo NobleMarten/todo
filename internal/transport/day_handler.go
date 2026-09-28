@@ -12,13 +12,13 @@ type PlanDayRequest struct {
 }
 
 // GetDay — GET /day?date=YYYY-MM-DD: сборка экрана «Сегодня». Без date — сегодня в APP_TZ.
-func (h *Handler) GetDay(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetDay(w http.ResponseWriter, r *http.Request, userID int) {
 	date, err := queryDate(r.URL.Query(), "date")
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	day, err := h.day.Day(r.Context(), date)
+	day, err := h.day.Day(r.Context(), userID, date)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -27,13 +27,13 @@ func (h *Handler) GetDay(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetWeek — GET /day/week?from=: экран «Неделя», семь дней с from (без него — с понедельника текущей недели).
-func (h *Handler) GetWeek(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetWeek(w http.ResponseWriter, r *http.Request, userID int) {
 	from, err := queryDate(r.URL.Query(), "from")
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	week, err := h.day.Week(r.Context(), from)
+	week, err := h.day.Week(r.Context(), userID, from)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -42,13 +42,13 @@ func (h *Handler) GetWeek(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetSuggestions — GET /day/suggestions?date=: материал для «Собрать день».
-func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request, userID int) {
 	date, err := queryDate(r.URL.Query(), "date")
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	s, err := h.day.Suggestions(r.Context(), date)
+	s, err := h.day.Suggestions(r.Context(), userID, date)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -56,13 +56,13 @@ func (h *Handler) GetSuggestions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, s)
 }
 
-func (h *Handler) PlanDay(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PlanDay(w http.ResponseWriter, r *http.Request, userID int) {
 	var req PlanDayRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err := h.day.Plan(r.Context(), req.Date, req.Add, req.Remove); err != nil {
+	if err := h.day.Plan(r.Context(), userID, req.Date, req.Add, req.Remove); err != nil {
 		WriteError(w, err)
 		return
 	}
@@ -70,7 +70,7 @@ func (h *Handler) PlanDay(w http.ResponseWriter, r *http.Request) {
 }
 
 // Activity — GET /stats/activity?from=&to=: [{date, done}] для грида активности.
-func (h *Handler) Activity(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Activity(w http.ResponseWriter, r *http.Request, userID int) {
 	q := r.URL.Query()
 	from, err := queryDate(q, "from")
 	if err != nil {
@@ -82,7 +82,7 @@ func (h *Handler) Activity(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err)
 		return
 	}
-	days, err := h.tasks.Activity(r.Context(), from, to)
+	days, err := h.tasks.Activity(r.Context(), userID, from, to)
 	if err != nil {
 		WriteError(w, err)
 		return

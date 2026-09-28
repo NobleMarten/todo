@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getAuthStatus } from './auth'
+import { getAuthStatus, login } from './auth'
 import { ApiError, errorText, onUnauthorized, request } from './client'
 
 afterEach(() => {
@@ -105,21 +105,42 @@ describe('onUnauthorized', () => {
 })
 
 describe('getAuthStatus', () => {
-  it('JSON от бэкенда — как есть', async () => {
-    stubFetch(async () => Response.json({ enabled: true, authed: false }))
-    await expect(getAuthStatus()).resolves.toEqual({ enabled: true, authed: false })
+  it('JSON от бэкенда: есть ли сессия и чья', async () => {
+    stubFetch(async () => Response.json({ authed: true, user: { login: 'noblemarten' } }))
+    await expect(getAuthStatus()).resolves.toEqual({ authed: true, login: 'noblemarten' })
+
+    stubFetch(async () => Response.json({ authed: false }))
+    await expect(getAuthStatus()).resolves.toEqual({ authed: false, login: null })
   })
 
-  it('не JSON (nginx не проксирует /auth и отдаёт index.html) или ошибка — вход выключен', async () => {
+  it('не JSON (nginx не проксирует /auth и отдаёт index.html) или сеть недоступна — пускаем, 401 вернёт ко входу', async () => {
     stubFetch(async () => new Response('<!doctype html><html></html>', { status: 200 }))
-    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
+    await expect(getAuthStatus()).resolves.toEqual({ authed: true, login: null })
 
     stubFetch(async () => new Response('', { status: 404 }))
-    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
+    await expect(getAuthStatus()).resolves.toEqual({ authed: true, login: null })
 
     stubFetch(async () => {
       throw new TypeError('Failed to fetch')
     })
-    await expect(getAuthStatus()).resolves.toEqual({ enabled: false, authed: true })
+    await expect(getAuthStatus()).resolves.toEqual({ authed: true, login: null })
+  })
+})
+
+describe('login', () => {
+  it('шлёт логин и пароль, возвращает, кто вошёл', async () => {
+    let body: unknown
+    stubFetch(async (_url, init) => {
+      body = JSON.parse(String(init?.body))
+      return Response.json({ login: 'alice' })
+    })
+    await expect(login('Alice', 'secret-pw')).resolves.toBe('alice')
+    expect(body).toEqual({ login: 'Alice', password: 'secret-pw' })
+  })
+
+  it('неверный логин или пароль — ошибка с понятным текстом', async () => {
+    stubFetch(async () => Response.json({ code: 'WRONG_PASSWORD', message: 'wrong login or password' }, { status: 401 }))
+    const err = await login('alice', 'nope').catch((e: unknown) => e)
+    expect(errorText(err)).toBe('неверный логин или пароль')
   })
 })

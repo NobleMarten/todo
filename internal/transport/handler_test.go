@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"todo/internal/auth"
 	"todo/internal/model"
 	"todo/internal/service"
 	"todo/internal/storage"
@@ -37,7 +38,17 @@ func do(t *testing.T, h http.Handler, method, path, body string) response {
 	return serve(h, newReq(method, path, body))
 }
 
+// testUser — от его имени идут запросы в тестах хендлеров (в проде пользователя кладёт RequireAuth).
+var testUser = model.User{ID: 1, Login: "test"}
+
 func newReq(method, path, body string) *http.Request {
+	req := httptest.NewRequest(method, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	return req.WithContext(auth.WithUser(req.Context(), testUser))
+}
+
+// newAnonReq — запрос без пользователя в контексте, как он приходит из сети.
+func newAnonReq(method, path, body string) *http.Request {
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	return req

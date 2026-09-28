@@ -4,6 +4,7 @@ import "time"
 
 type Task struct {
 	ID           int        `json:"id"`
+	UserID       int        `json:"-"` // владелец; наружу не отдаётся — чужих задач клиент не видит
 	Title        string     `json:"title"`
 	Done         bool       `json:"done"`
 	Priority     string     `json:"priority"` // high | medium | low

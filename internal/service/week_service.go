@@ -40,7 +40,7 @@ func mondayOf(d model.Date) model.Date {
 
 // Week собирает неделю с from (без from — с понедельника текущей недели в APP_TZ).
 // Задача с датами в двух днях недели показывается в обоих: в дне работы и в дне дедлайна.
-func (s *DayService) Week(ctx context.Context, from *model.Date) (Week, error) {
+func (s *DayService) Week(ctx context.Context, userID int, from *model.Date) (Week, error) {
 	start := mondayOf(model.Today(s.loc))
 	if from != nil && !from.IsZero() {
 		start = *from
@@ -48,13 +48,13 @@ func (s *DayService) Week(ctx context.Context, from *model.Date) (Week, error) {
 	end := start.AddDays(weekDays - 1)
 	notDone, done := false, true
 
-	dated, err := s.list(ctx, storage.TaskQuery{
+	dated, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, AnyDateBetween: &storage.DateRange{From: start, To: end}},
 	})
 	if err != nil {
 		return Week{}, err
 	}
-	finished, err := s.list(ctx, storage.TaskQuery{
+	finished, err := s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &done, DoneBetween: &storage.TimeRange{
 			From: start.Time(s.loc), To: end.AddDays(1).Time(s.loc),
 		}},
@@ -92,7 +92,7 @@ func (s *DayService) Week(ctx context.Context, from *model.Date) (Week, error) {
 		}
 	}
 
-	w.Upcoming, err = s.list(ctx, storage.TaskQuery{
+	w.Upcoming, err = s.list(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, DueBetween: &storage.DateRange{
 			From: end.AddDays(1), To: end.AddDays(upcomingDays),
 		}},
@@ -102,7 +102,7 @@ func (s *DayService) Week(ctx context.Context, from *model.Date) (Week, error) {
 	if err != nil {
 		return Week{}, err
 	}
-	w.Backlog, w.BacklogTotal, err = s.tasks.ListTasks(ctx, storage.TaskQuery{
+	w.Backlog, w.BacklogTotal, err = s.tasks.ListTasks(ctx, userID, storage.TaskQuery{
 		Filter: storage.TaskFilter{Done: &notDone, NoDates: true},
 		Limit:  backlogLimit,
 	})

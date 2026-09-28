@@ -109,7 +109,7 @@ func TestMigrate_EmptyDatabase(t *testing.T) {
 		t.Fatalf("up: %v", err)
 	}
 	repo := NewPostgresRepo(db)
-	task, err := repo.CreateTask(t.Context(), NewTask{Title: "первая", Priority: "medium"})
+	task, err := repo.CreateTask(t.Context(), u1, NewTask{Title: "первая", Priority: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ func TestMigrate_NullPriorityFixed(t *testing.T) {
 	if err := Migrate(db); err != nil {
 		t.Fatalf("up: %v", err)
 	}
-	items, _, err := NewPostgresRepo(db).ListTasks(t.Context(), TaskQuery{})
+	items, _, err := NewPostgresRepo(db).ListTasks(t.Context(), u1, TaskQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestMigrate_NullPriorityFixed(t *testing.T) {
 func assertMigrated(t *testing.T, db *sql.DB) {
 	t.Helper()
 	repo := NewPostgresRepo(db)
-	tasks, _, err := repo.ListTasks(t.Context(), TaskQuery{})
+	tasks, _, err := repo.ListTasks(t.Context(), u1, TaskQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,6 +178,24 @@ func assertMigrated(t *testing.T, db *sql.DB) {
 	mustScan(t, db, `SELECT count(*) FROM projects`, &projects)
 	if projects != 6 {
 		t.Fatalf("списков %d, want 6", projects)
+	}
+
+	// 00008: всё прежнее — владельца noblemarten, пароль он задаёт командой после деплоя
+	var owner struct {
+		id     int
+		login  string
+		noPass bool
+	}
+	if err := db.QueryRow(`SELECT id, login, password_hash IS NULL FROM users`).Scan(&owner.id, &owner.login, &owner.noPass); err != nil {
+		t.Fatalf("владелец: %v", err)
+	}
+	if owner.id != u1 || owner.login != "noblemarten" || !owner.noPass {
+		t.Fatalf("владелец = %+v", owner)
+	}
+	var foreign int
+	mustScan(t, db, `SELECT (SELECT count(*) FROM tasks WHERE user_id <> 1) + (SELECT count(*) FROM projects WHERE user_id <> 1)`, &foreign)
+	if foreign != 0 {
+		t.Fatalf("строк не владельца: %d", foreign)
 	}
 }
 

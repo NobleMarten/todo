@@ -23,7 +23,7 @@ type ReorderProjectsRequest struct {
 }
 
 // ListProjects — GET /projects[?archived=true][&today=YYYY-MM-DD].
-func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request, userID int) {
 	q := r.URL.Query()
 	archived, err := queryBool(q, "archived")
 	if err != nil {
@@ -35,7 +35,7 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err)
 		return
 	}
-	projects, err := h.projects.List(r.Context(), archived != nil && *archived, today)
+	projects, err := h.projects.List(r.Context(), userID, archived != nil && *archived, today)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -43,13 +43,13 @@ func (h *Handler) ListProjects(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, projects)
 }
 
-func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request, userID int) {
 	var req CreateProjectRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		WriteError(w, err)
 		return
 	}
-	project, err := h.projects.Create(r.Context(), req.Name, req.Color)
+	project, err := h.projects.Create(r.Context(), userID, req.Name, req.Color)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -57,7 +57,7 @@ func (h *Handler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, project)
 }
 
-func (h *Handler) PatchProject(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PatchProject(w http.ResponseWriter, r *http.Request, userID int) {
 	id, err := pathID(r)
 	if err != nil {
 		WriteError(w, err)
@@ -81,7 +81,7 @@ func (h *Handler) PatchProject(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err)
 		return
 	}
-	project, err := h.projects.Patch(r.Context(), id, patch)
+	project, err := h.projects.Patch(r.Context(), userID, id, patch)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -90,26 +90,26 @@ func (h *Handler) PatchProject(w http.ResponseWriter, r *http.Request) {
 }
 
 // DeleteProject — задачи списка уходят во «Входящие».
-func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteProject(w http.ResponseWriter, r *http.Request, userID int) {
 	id, err := pathID(r)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err := h.projects.Delete(r.Context(), id); err != nil {
+	if err := h.projects.Delete(r.Context(), userID, id); err != nil {
 		WriteError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) ReorderProjects(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ReorderProjects(w http.ResponseWriter, r *http.Request, userID int) {
 	var req ReorderProjectsRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err := h.projects.Reorder(r.Context(), req.IDs); err != nil {
+	if err := h.projects.Reorder(r.Context(), userID, req.IDs); err != nil {
 		WriteError(w, err)
 		return
 	}

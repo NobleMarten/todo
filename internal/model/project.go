@@ -5,6 +5,7 @@ import "time"
 // Project — список задач. Задачи без project_id считаются «Входящими».
 type Project struct {
 	ID        int            `json:"id"`
+	UserID    int            `json:"-"` // владелец
 	Name      string         `json:"name"`
 	Color     string         `json:"color"`
 	Position  int            `json:"position"`

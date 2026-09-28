@@ -96,32 +96,57 @@ type ProjectPatch struct {
 	Archived *bool
 }
 
+// Все методы TaskRepo и ProjectRepo работают в пределах одного пользователя (userID — первый аргумент
+// после ctx): чужие задачи и списки для них не существуют — Get отдаёт «не найдено», Patch/Delete их
+// не находят, Reorder/PlanDay молча пропускают. userID явным аргументом, а не в контексте: забытая
+// проверка не скомпилируется. Дополнительно база не даёт связать задачу с чужим списком или чужим
+// родителем (составные внешние ключи, миграция 00008).
+
 type TaskRepo interface {
-	CreateTask(ctx context.Context, t NewTask) (model.Task, error)
+	CreateTask(ctx context.Context, userID int, t NewTask) (model.Task, error)
 	// GetTask возвращает model.ErrNotFound, если задачи нет. SubtaskStats заполнен.
-	GetTask(ctx context.Context, id int) (model.Task, error)
+	GetTask(ctx context.Context, userID, id int) (model.Task, error)
 	// ListTasks отдаёт только корневые задачи с SubtaskStats; total посчитан до пагинации.
-	ListTasks(ctx context.Context, q TaskQuery) (items []model.Task, total int, err error)
-	Subtasks(ctx context.Context, parentID int) ([]model.Task, error)
-	PatchTask(ctx context.Context, id int, p TaskPatch) (model.Task, error)
-	DeleteTask(ctx context.Context, id int) error
+	ListTasks(ctx context.Context, userID int, q TaskQuery) (items []model.Task, total int, err error)
+	Subtasks(ctx context.Context, userID, parentID int) ([]model.Task, error)
+	PatchTask(ctx context.Context, userID, id int, p TaskPatch) (model.Task, error)
+	DeleteTask(ctx context.Context, userID, id int) error
 	// ReorderTasks в одной транзакции ставит position = индекс в ids тем задачам,
 	// которые подходят под scope; остальные id молча пропускает.
-	ReorderTasks(ctx context.Context, scope TaskFilter, ids []int) error
+	ReorderTasks(ctx context.Context, userID int, scope TaskFilter, ids []int) error
 	// PlanDay ставит scheduled_for = date невыполненным задачам из add и снимает его
 	// с задач из remove, если они были запланированы именно на date.
-	PlanDay(ctx context.Context, date model.Date, add, remove []int) error
+	PlanDay(ctx context.Context, userID int, date model.Date, add, remove []int) error
 	// DoneActivity — число выполненных корневых задач по дням done_at в таймзоне loc, только дни с done > 0.
-	DoneActivity(ctx context.Context, days DateRange, loc *time.Location) ([]model.DayCount, error)
+	DoneActivity(ctx context.Context, userID int, days DateRange, loc *time.Location) ([]model.DayCount, error)
 }
 
 type ProjectRepo interface {
 	// ListProjects отдаёт списки по position с Counts; overdue считается относительно today.
-	ListProjects(ctx context.Context, includeArchived bool, today model.Date) ([]model.Project, error)
+	ListProjects(ctx context.Context, userID int, includeArchived bool, today model.Date) ([]model.Project, error)
 	// GetProject возвращает model.ErrProjectNotFound, если списка нет.
-	GetProject(ctx context.Context, id int) (model.Project, error)
-	CreateProject(ctx context.Context, name, color string) (model.Project, error)
-	PatchProject(ctx context.Context, id int, p ProjectPatch) (model.Project, error)
-	DeleteProject(ctx context.Context, id int) error
-	ReorderProjects(ctx context.Context, ids []int) error
+	GetProject(ctx context.Context, userID, id int) (model.Project, error)
+	CreateProject(ctx context.Context, userID int, name, color string) (model.Project, error)
+	PatchProject(ctx context.Context, userID, id int, p ProjectPatch) (model.Project, error)
+	DeleteProject(ctx context.Context, userID, id int) error
+	ReorderProjects(ctx context.Context, userID int, ids []int) error
+}
+
+// UserRepo — пользователи и их сессии. В сессии хранится только SHA-256 токена из cookie.
+type UserRepo interface {
+	// CreateUser возвращает model.ErrLoginTaken, если логин занят.
+	CreateUser(ctx context.Context, login, passwordHash string) (model.User, error)
+	// UserByLogin возвращает model.ErrUserNotFound, если такого логина нет.
+	UserByLogin(ctx context.Context, login string) (model.User, error)
+	SetPassword(ctx context.Context, userID int, passwordHash string) error
+	ListUsers(ctx context.Context) ([]model.User, error)
+
+	// CreateSession заодно удаляет истёкшие сессии: отдельная уборка не нужна.
+	CreateSession(ctx context.Context, userID int, tokenHash []byte, expires time.Time) error
+	// SessionUser — владелец живой (expires_at > now) сессии и её срок; иначе model.ErrUnauthorized.
+	SessionUser(ctx context.Context, tokenHash []byte, now time.Time) (model.User, time.Time, error)
+	ExtendSession(ctx context.Context, tokenHash []byte, expires time.Time) error
+	DeleteSession(ctx context.Context, tokenHash []byte) error
+	// DeleteUserSessions — выход на всех устройствах (после смены пароля).
+	DeleteUserSessions(ctx context.Context, userID int) error
 }
