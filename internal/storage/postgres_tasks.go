@@ -315,6 +315,27 @@ func (pr *PostgresRepo) DoneActivity(ctx context.Context, userID int, days DateR
 	return out, rows.Err()
 }
 
+func (pr *PostgresRepo) StatsTasks(ctx context.Context, userID int, since time.Time) ([]model.Task, error) {
+	rows, err := pr.db.QueryContext(ctx, "SELECT "+taskColumns+` FROM tasks t
+		WHERE t.user_id = @user_id AND t.parent_id IS NULL
+			AND (NOT t.done OR t.created_at >= @since OR t.done_at >= @since)
+		ORDER BY t.id`, pgx.NamedArgs{"user_id": userID, "since": since})
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	tasks := []model.Task{}
+	for rows.Next() {
+		task, err := scanTask(rows)
+		if err != nil {
+			return nil, err
+		}
+		tasks = append(tasks, task)
+	}
+	return tasks, rows.Err()
+}
+
 // filterConds переводит TaskFilter в условия WHERE над алиасом t и дописывает аргументы в args.
 // Имена аргументов с префиксом f_, чтобы не столкнуться с аргументами самого запроса.
 func filterConds(f TaskFilter, args pgx.NamedArgs) []string {

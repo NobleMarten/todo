@@ -386,6 +386,16 @@ func TestDayEndpoints(t *testing.T) {
 		t.Fatalf("activity = %+v", activity)
 	}
 	do(t, h, "GET", "/stats/activity?from=2026-09-22&to=2026-09-21", "").expect(t, 400, "INVALID_QUERY")
+
+	res = do(t, h, "GET", "/stats/summary", "")
+	res.expect(t, 200, "")
+	var summary model.StatsSummary
+	res.decode(t, &summary)
+	if summary.Totals.Done != 1 || len(summary.Days) != 30 || summary.Backlog.Active != 2 {
+		t.Fatalf("summary = %+v", summary)
+	}
+	do(t, h, "GET", "/stats/summary?from=2026-09-22&to=2026-09-21", "").expect(t, 400, "INVALID_QUERY")
+	do(t, h, "GET", "/stats/summary?from=22.09", "").expect(t, 400, "INVALID_DATE")
 }
 
 func TestRouting(t *testing.T) {

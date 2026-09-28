@@ -299,6 +299,23 @@ func (fr *FakeRepo) DoneActivity(_ context.Context, userID int, days DateRange, 
 	return out, nil
 }
 
+func (fr *FakeRepo) StatsTasks(_ context.Context, userID int, since time.Time) ([]model.Task, error) {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	out := []model.Task{}
+	for _, t := range fr.Tasks {
+		if t.UserID != userID || t.ParentID != nil {
+			continue
+		}
+		if !t.Done || !t.CreatedAt.Before(since) || (t.DoneAt != nil && !t.DoneAt.Before(since)) {
+			out = append(out, t)
+		}
+	}
+	slices.SortFunc(out, func(a, b model.Task) int { return cmp.Compare(a.ID, b.ID) })
+	return out, nil
+}
+
 func (fr *FakeRepo) ListProjects(_ context.Context, userID int, includeArchived bool, today model.Date) ([]model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()

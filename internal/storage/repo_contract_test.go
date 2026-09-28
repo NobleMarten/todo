@@ -426,6 +426,44 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 	})
 
+	t.Run("stats tasks", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		other, err := r.CreateUser(ctx, "other", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		active := mustCreate(t, r, NewTask{Title: "active"})
+		done := mustCreate(t, r, NewTask{Title: "done"})
+		mustCreate(t, r, NewTask{Title: "sub", ParentID: &active.ID})
+		if _, err := r.PatchTask(ctx, u1, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.CreateTask(ctx, other.ID, NewTask{Title: "чужая", Priority: "low"}); err != nil {
+			t.Fatal(err)
+		}
+
+		// время берём с запасом: у Postgres и у теста разные часы
+		got, err := r.StatsTasks(ctx, u1, time.Now().Add(-time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(got), []int{active.ID, done.ID}) {
+			t.Fatalf("since час назад: %v, want [%d %d]", ids(got), active.ID, done.ID)
+		}
+		if got[1].DoneAt == nil || got[1].CreatedAt.IsZero() {
+			t.Fatalf("нет дат у выполненной: %+v", got[1])
+		}
+		// выполненная раньше since отсекается, невыполненная остаётся всегда
+		got, err = r.StatsTasks(ctx, u1, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(got), []int{active.ID}) {
+			t.Fatalf("since через час: %v, want [%d]", ids(got), active.ID)
+		}
+	})
+
 	t.Run("search", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()
