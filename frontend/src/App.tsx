@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
 import { TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
@@ -70,7 +71,7 @@ export default function App() {
         </Routes>
       </main>
       {!hidesTabBar(basePath) && <TabBar pathname={basePath} />}
-      {taskId !== null && <TaskSheet key={taskId} id={taskId} onClose={closeSheet} />}
+      <AnimatePresence>{taskId !== null && <TaskSheet key={taskId} id={taskId} onClose={closeSheet} />}</AnimatePresence>
       <UndoToast />
     </div>
   )

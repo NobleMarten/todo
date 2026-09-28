@@ -751,7 +751,9 @@ ul { list-style: none; }
   align-items: flex-end;
   justify-content: center;
 }
-.sheet-backdrop { position: absolute; inset: 0; background: var(--backdrop); }
+.sheet-backdrop { position: absolute; inset: 0; }
+/* затемнение отдельным слоем: снаружи — появление/уход, внутри — светлеет вместе с жестом шита */
+.sheet-backdrop-fill { position: absolute; inset: 0; background: var(--backdrop); }
 .sheet {
   position: relative;
   width: 100%;
@@ -766,7 +768,13 @@ ul { list-style: none; }
   border: 1px solid var(--border-strong);
   border-bottom: none;
   box-shadow: var(--shadow);
+  /* шит тянут пальцем: без этого жест выделяет текст карточки и открывает лупу/меню */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
+.sheet input,
+.sheet textarea { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .sheet-grabber {
   width: 38px;
   height: 4px;

@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
 import { ColorSwatches } from '../components/ProjectPicker'
@@ -194,20 +195,22 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
         />
       )}
 
-      {menuOpen && project && (
-        <ProjectMenu
-          project={project}
-          onClose={() => setMenuOpen(false)}
-          onRename={(name) => projects.update(project.id, { name })}
-          onColor={(color) => projects.update(project.id, { color })}
-          onArchive={async () => {
-            if (await projects.update(project.id, { archived: true })) navigate('/lists')
-          }}
-          onDelete={async () => {
-            if (await projects.remove(project.id)) navigate('/lists')
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {menuOpen && project && (
+          <ProjectMenu
+            project={project}
+            onClose={() => setMenuOpen(false)}
+            onRename={(name) => projects.update(project.id, { name })}
+            onColor={(color) => projects.update(project.id, { color })}
+            onArchive={async () => {
+              if (await projects.update(project.id, { archived: true })) navigate('/lists')
+            }}
+            onDelete={async () => {
+              if (await projects.remove(project.id)) navigate('/lists')
+            }}
+          />
+        )}
+      </AnimatePresence>
       {projects.actionError && (
         <button className="error-bar" onClick={projects.clearActionError}>
           {projects.actionError}
