@@ -19,6 +19,7 @@ const task = (id: number): Task => ({
   created_at: '',
   done_at: null,
   updated_at: '',
+  postponed: 0,
 })
 
 let fetchMock: ReturnType<typeof vi.fn>

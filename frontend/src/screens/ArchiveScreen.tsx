@@ -1,17 +1,26 @@
+import { useState } from 'react'
 import type { Task } from '../api/types'
 import { Activity } from '../components/Activity'
 import { DoneRow } from '../components/DoneRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { ErrorState } from '../components/ErrorState'
 import { SkeletonRows } from '../components/Skeleton'
+import { StatsPanel } from '../components/StatsPanel'
 import { SpinIcon } from '../components/icons'
 import { useActivity } from '../hooks/useActivity'
 import { useProjects } from '../hooks/useProjects'
+import { useStats } from '../hooks/useStats'
 import { useArchive } from '../hooks/useTasks'
 import { addDays, dayHeading, timeOf, todayStr, toDateStr } from '../lib/date'
+import { loadPeriod, savePeriod, type Period } from '../lib/stats'
 
-/** Экран «Итоги»: грид активности и выполненные задачи по дням, свежие сверху; внизу — кто вошёл и «выйти». */
+/**
+ * Экран «Итоги»: статистика за выбранный период, грид активности за год и выполненные задачи по дням,
+ * свежие сверху; внизу — кто вошёл и «выйти».
+ */
 export function ArchiveScreen({ user, onLogout }: { user: string | null; onLogout: () => void }) {
+  const [period, setPeriod] = useState<Period>(loadPeriod)
+  const stats = useStats(period)
   const activity = useActivity()
   const archive = useArchive()
   const { all: projects } = useProjects()
@@ -25,12 +34,28 @@ export function ArchiveScreen({ user, onLogout }: { user: string | null; onLogou
       </div>
       <ScreenHeader title="Итоги" />
 
+      <StatsPanel
+        period={period}
+        onPeriod={(p) => {
+          setPeriod(p)
+          savePeriod(p)
+        }}
+        data={stats.data}
+        loading={stats.loading}
+        error={stats.error}
+        onReload={stats.reload}
+        projects={projectById}
+      />
+
+      <div className="section-label stats-heading">активность</div>
       <Activity
         counts={activity.counts}
         loading={activity.loading}
         error={activity.error}
         onReload={activity.reload}
       />
+
+      <div className="section-label stats-heading">выполненные</div>
 
       {archive.error && archive.items.length > 0 && (
         <button className="error-bar" onClick={() => archive.reload()}>

@@ -20,6 +20,7 @@ export type Task = {
   created_at: string
   done_at: string | null
   updated_at: string
+  postponed: number // сколько раз due_date/scheduled_for сдвигали позже
   subtasks?: Task[] // только в GET /tasks/{id}
   subtask_stats?: Stats // только у корневых задач в списках
 }
@@ -90,6 +91,44 @@ export type Suggestions = {
 
 // GET /stats/activity: только дни, где что-то выполнено.
 export type DayCount = { date: DateStr; done: number }
+
+// GET /stats/summary: всё по корневым задачам, дни и часы — в APP_TZ сервера.
+export type StatsTotals = {
+  done: number
+  created: number
+  created_done: number // из созданных за период уже выполнено
+  on_time: number // выполнены не позже дедлайна
+  late: number
+  active_days: number
+  lead_hours: number | null // медиана «создана → выполнена»
+}
+
+export type StatsDay = { date: DateStr; done: number; created: number }
+
+export type TaskRef = { id: number; title: string; created_at: string; postponed: number }
+
+export type StatsSummary = {
+  from: DateStr
+  to: DateStr
+  totals: StatsTotals
+  prev: StatsTotals // такой же период перед from
+  days: StatsDay[] // каждый день периода
+  lists: { project_id: number | null; done: number }[] // по убыванию, null — входящие
+  by_priority: Record<Priority, number>
+  weekday: number[] // 7, 0 = пн
+  hours: number[] // 24
+  backlog: {
+    active: number
+    overdue: number
+    no_dates: number
+    inbox: number
+    stale: number // не менялись дольше 30 дней
+    postponed: number
+    age_days: number | null
+    oldest: TaskRef | null
+    delayed: TaskRef[] // чаще всего переносимые, до 5
+  }
+}
 
 // GET /day/week — экран «Неделя».
 export type WeekDay = { date: DateStr; scheduled: Task[]; deadlines: Task[]; done: Task[] }

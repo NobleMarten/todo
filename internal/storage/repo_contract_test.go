@@ -381,6 +381,89 @@ func runContract(t *testing.T, newRepo func(t *testing.T) fullRepo) {
 		}
 	})
 
+	t.Run("postponed counter", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		task := mustCreate(t, r, NewTask{Title: "x"})
+		date := func(d model.Date) model.Opt[model.Date] { return model.Opt[model.Date]{Set: true, Value: &d} }
+		clear := model.Opt[model.Date]{Set: true}
+
+		steps := []struct {
+			name  string
+			patch TaskPatch
+			want  int
+		}{
+			{"первая дата — не перенос", TaskPatch{DueDate: date(d0), ScheduledFor: date(d0)}, 0},
+			{"раньше — не перенос", TaskPatch{ScheduledFor: date(d0.AddDays(-1))}, 0},
+			{"та же дата", TaskPatch{DueDate: date(d0)}, 0},
+			{"позже", TaskPatch{ScheduledFor: date(d0.AddDays(2))}, 1},
+			{"обе позже — один перенос", TaskPatch{DueDate: date(d0.AddDays(5)), ScheduledFor: date(d0.AddDays(5))}, 2},
+			{"снятие — не перенос", TaskPatch{DueDate: clear, ScheduledFor: clear}, 2},
+			{"без дат в патче", TaskPatch{Title: ptr("y")}, 2},
+		}
+		for _, s := range steps {
+			got, err := r.PatchTask(ctx, u1, task.ID, s.patch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Postponed != s.want {
+				t.Fatalf("%s: postponed = %d, want %d", s.name, got.Postponed, s.want)
+			}
+		}
+
+		// сборка дня: перенос, только если день уже стоял раньше
+		if _, err := r.PatchTask(ctx, u1, task.ID, TaskPatch{ScheduledFor: date(d0)}); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.PlanDay(ctx, u1, d0.AddDays(1), []int{task.ID}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := r.PlanDay(ctx, u1, d0.AddDays(1), []int{task.ID}, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := r.GetTask(ctx, u1, task.ID); got.Postponed != 3 {
+			t.Fatalf("после PlanDay postponed = %d, want 3", got.Postponed)
+		}
+	})
+
+	t.Run("stats tasks", func(t *testing.T) {
+		r := newRepo(t)
+		ctx := t.Context()
+		other, err := r.CreateUser(ctx, "other", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		active := mustCreate(t, r, NewTask{Title: "active"})
+		done := mustCreate(t, r, NewTask{Title: "done"})
+		mustCreate(t, r, NewTask{Title: "sub", ParentID: &active.ID})
+		if _, err := r.PatchTask(ctx, u1, done.ID, TaskPatch{Done: ptr(true)}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := r.CreateTask(ctx, other.ID, NewTask{Title: "чужая", Priority: "low"}); err != nil {
+			t.Fatal(err)
+		}
+
+		// время берём с запасом: у Postgres и у теста разные часы
+		got, err := r.StatsTasks(ctx, u1, time.Now().Add(-time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(got), []int{active.ID, done.ID}) {
+			t.Fatalf("since час назад: %v, want [%d %d]", ids(got), active.ID, done.ID)
+		}
+		if got[1].DoneAt == nil || got[1].CreatedAt.IsZero() {
+			t.Fatalf("нет дат у выполненной: %+v", got[1])
+		}
+		// выполненная раньше since отсекается, невыполненная остаётся всегда
+		got, err = r.StatsTasks(ctx, u1, time.Now().Add(time.Hour))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(ids(got), []int{active.ID}) {
+			t.Fatalf("since через час: %v, want [%d]", ids(got), active.ID)
+		}
+	})
+
 	t.Run("search", func(t *testing.T) {
 		r := newRepo(t)
 		ctx := t.Context()

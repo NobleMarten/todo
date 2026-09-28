@@ -119,6 +119,9 @@ type TaskRepo interface {
 	PlanDay(ctx context.Context, userID int, date model.Date, add, remove []int) error
 	// DoneActivity — число выполненных корневых задач по дням done_at в таймзоне loc, только дни с done > 0.
 	DoneActivity(ctx context.Context, userID int, days DateRange, loc *time.Location) ([]model.DayCount, error)
+	// StatsTasks — сырьё для статистики: корневые задачи без подзадач и SubtaskStats, которые ещё не выполнены
+	// или были созданы либо выполнены начиная с since. Считает сервис: периоды, медианы, часы и дни недели в APP_TZ.
+	StatsTasks(ctx context.Context, userID int, since time.Time) ([]model.Task, error)
 }
 
 type ProjectRepo interface {

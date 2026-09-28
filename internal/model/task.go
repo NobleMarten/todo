@@ -18,6 +18,7 @@ type Task struct {
 	CreatedAt    time.Time  `json:"created_at"`
 	DoneAt       *time.Time `json:"done_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`              // последняя правка через PATCH; reorder не считается
+	Postponed    int        `json:"postponed"`               // сколько раз due_date/scheduled_for сдвигали позже
 	Subtasks     []Task     `json:"subtasks,omitempty"`      // только в GET /tasks/{id}
 	SubtaskStats *Stats     `json:"subtask_stats,omitempty"` // только у корневых задач в списках
 }

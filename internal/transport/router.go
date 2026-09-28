@@ -17,6 +17,7 @@ type TaskService interface {
 	Delete(ctx context.Context, userID int, id int) error
 	Reorder(ctx context.Context, userID int, scope service.ReorderScope, ids []int) error
 	Activity(ctx context.Context, userID int, from, to *model.Date) ([]model.DayCount, error)
+	Summary(ctx context.Context, userID int, from, to *model.Date) (model.StatsSummary, error)
 }
 
 type ProjectService interface {
@@ -71,6 +72,7 @@ func NewRouter(h *Handler) *http.ServeMux {
 	mux.HandleFunc("POST /day/plan", withUser(h.PlanDay))
 
 	mux.HandleFunc("GET /stats/activity", withUser(h.Activity))
+	mux.HandleFunc("GET /stats/summary", withUser(h.StatsSummary))
 
 	return mux
 }

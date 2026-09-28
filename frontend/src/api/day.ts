@@ -1,6 +1,6 @@
 import { visible } from '../lib/deleting'
 import { request } from './client'
-import type { DateStr, Day, DayCount, Suggestions, Task, Week } from './types'
+import type { DateStr, Day, DayCount, StatsSummary, Suggestions, Task, Week } from './types'
 
 /** Экран «Сегодня»: план, просроченное, недоделанное и выполненное за день. */
 export async function getDay(date: DateStr): Promise<Day> {
@@ -48,4 +48,9 @@ export function planDay(date: DateStr, add: number[], remove: number[] = []): Pr
 /** Выполнено по дням (разреженно: дни без выполненных не приходят). */
 export async function getActivity(from: DateStr, to: DateStr): Promise<DayCount[]> {
   return (await request<DayCount[] | null>('GET', '/stats/activity', { query: { from, to } })) ?? []
+}
+
+/** Итоги периода [from, to] против такого же периода перед ним, плюс бэклог на день to. */
+export function getStatsSummary(from: DateStr, to: DateStr): Promise<StatsSummary> {
+  return request<StatsSummary>('GET', '/stats/summary', { query: { from, to } })
 }

@@ -54,6 +54,7 @@ cd frontend && npm install && npm run dev
   "position": 7, "note": null,
   "repeat": "weekly:1,4",        // повтор: daily | weekdays | weekly:1,4 (1 = пн) | monthly:15; null — нет
   "created_at": "…", "done_at": null, "updated_at": "…",
+  "postponed": 2,                // сколько раз due_date/scheduled_for сдвигали позже (PATCH, сборка дня)
   "subtask_stats": {"done": 1, "total": 3}   // в выдачах списков
 }
 // Project
@@ -167,7 +168,6 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
 | `GET /day/suggestions?date=`    | `{overdue, due_soon, stale}`                                           |
 | `GET /day/week?from=`           | `{from, to, days: [{date, scheduled, deadlines, done}], upcoming, backlog, backlog_total}` |
 | `POST /day/plan`                | тело `{date, add: [id], remove: [id]}` → `204`                         |
-| `GET /stats/activity?from=&to=` | `[{date, done}]`, только дни с выполненными; без параметров — последний год |
 
 - `planned` — `scheduled_for = date`; `overdue` — `due_date < date`; `carry_over` — `scheduled_for < date`
   («вчера не доделал»); `done_today` — выполненные в этот день по `APP_TZ`. Задача попадает ровно в один
@@ -180,6 +180,34 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
   в 60 днях после недели, `backlog` — до 30 задач без дат по `position`, `backlog_total` — всего.
 - `/day/plan` одной транзакцией ставит `scheduled_for = date` задачам из `add` и снимает его у задач из
   `remove` (только если они стояли именно на `date`).
+
+### Статистика
+
+| запрос                          | ответ                                                                  |
+|---------------------------------|------------------------------------------------------------------------|
+| `GET /stats/activity?from=&to=` | `[{date, done}]`, только дни с выполненными; без параметров — последний год |
+| `GET /stats/summary?from=&to=`  | итоги периода (см. ниже); без параметров — последние 30 дней, не длиннее 366 дней |
+
+```jsonc
+{
+  "from": "2026-09-15", "to": "2026-09-21",
+  "totals": {"done": 12, "created": 9, "created_done": 5, "on_time": 4, "late": 1,
+             "active_days": 6, "lead_hours": 20.5},   // медиана «создана → выполнена», null — нечего считать
+  "prev":   {…},                                      // то же за такой же период перед from
+  "days":   [{"date": "2026-09-15", "done": 2, "created": 1}, …],  // каждый день периода
+  "lists":  [{"project_id": 3, "done": 5}, {"project_id": null, "done": 2}],  // null — входящие
+  "by_priority": {"high": 3, "medium": 4, "low": 5},
+  "weekday": [2, 1, 0, 3, 4, 1, 1],                   // 0 = пн
+  "hours":   [0, 0, …],                               // 24 часа done_at
+  "backlog": {"active": 20, "overdue": 2, "no_dates": 7, "inbox": 3, "stale": 4, "postponed": 9,
+              "age_days": 12, "oldest": {"id", "title", "created_at", "postponed"},
+              "delayed": [ /* до 5 чаще всего переносимых, те же поля */ ]}
+}
+```
+
+Всё — по корневым задачам, дни и часы — в `APP_TZ`. `on_time`/`late` — выполненные с дедлайном: в день
+дедлайна или раньше / позже. `backlog` — невыполненные на день `to`: `overdue` — дедлайн раньше `to`,
+`stale` — не менялись дольше 30 дней, `age_days` — медианный возраст.
 
 ### Ошибки
 
@@ -211,6 +239,10 @@ curl -X POST localhost:8080/tasks/reorder -d '{"scope":{"type":"inbox"},"ids":[4
   целиком; нажатие на чип ставит его на выбранный день. Поле внизу дня добавляет задачу на этот день (`@дата` — на другой).
 - **Поиск** (`/search`, кнопка на «Списках»): по заголовкам и заметкам, активные и последние 30 выполненных,
   запрос в `?q=`.
+- **Итоги** (`/archive`, таб «итоги»): статистика за 7 дней, 30 дней или год — выполнено и создано с изменением
+  к прошлому такому же периоду, доля в срок, медианное время до готовности; график «выполнено и создано»,
+  разбивка по спискам и приоритетам, ритм по дням недели и часам, «сейчас в работе» (просрочено, без дат,
+  залежалось, чаще всего переносимые). Ниже — грид активности и выполненные задачи по дням.
 - **Выполненные** в списке и во входящих — свёрнутая секция «выполнено · N» внизу, галочка возвращает задачу.
 - **Перетаскивание** за ручку справа, порядок сохраняется в БД через `/tasks/reorder`.
 - Все «сегодня» считаются по локальной дате устройства и уходят в запросы параметром `today=`.
