@@ -53,7 +53,6 @@ export default function App() {
   if (auth.state !== 'in') {
     return (
       <div className="app">
-        <div className="grain" aria-hidden="true" />
         <main className="container">{auth.state === 'out' && <LoginScreen onLogin={auth.login} />}</main>
       </div>
     )
@@ -61,7 +60,6 @@ export default function App() {
 
   return (
     <div className="app">
-      <div className="grain" aria-hidden="true" />
       <main className="container">
         <Routes location={base}>
           <Route path="/" element={<Navigate to="/today" replace />} />

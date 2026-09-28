@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useNavigationType } from 'react-router-dom'
+import { isScrollLocked } from '../lib/scrollLock'
 import { createScrollMemory } from '../lib/scrollMemory'
 
 const memory = createScrollMemory()
@@ -53,7 +54,10 @@ export function useScrollRestoration(key: string, pathname: string) {
     let frame = 0
     const onScroll = () => {
       cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => memory.save(current.current.key, current.current.pathname, window.scrollY))
+      frame = requestAnimationFrame(() => {
+        // под шитом body зафиксирован и scrollY = 0 — это не прокрутка экрана
+        if (!isScrollLocked()) memory.save(current.current.key, current.current.pathname, window.scrollY)
+      })
     }
     window.addEventListener('scroll', onScroll, { passive: true })
     return () => {

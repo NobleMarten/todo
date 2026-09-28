@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import { animate, motion, useIsPresent, useMotionValue, useTransform } from 'framer-motion'
+import { lockScroll, unlockScroll } from '../lib/scrollLock'
 import { blocksScroll, decide, shouldDismiss, velocity, type Decision, type Sample } from '../lib/sheetGesture'
 
 interface Props {
@@ -49,12 +50,11 @@ export function Sheet({ label, onClose, children }: Props) {
       if (e.key === 'Escape') closeRef.current()
     }
     document.addEventListener('keydown', onKey)
-    // экран под шитом не должен прокручиваться вместе с ним
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    // экран под шитом не должен прокручиваться вместе с ним (lib/scrollLock)
+    lockScroll()
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = prev
+      unlockScroll()
     }
   }, [])
 

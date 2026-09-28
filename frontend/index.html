@@ -15,6 +15,16 @@
     <meta name="apple-mobile-web-app-title" content="todo" />
     <meta name="format-detection" content="telephone=no, date=no" />
     <title>todo</title>
+    <!-- тема до первой отрисовки (зеркало hooks/useTheme): без этого светлая тема мелькала тёмной -->
+    <script>
+      try {
+        var t = localStorage.getItem('todo-theme')
+        if (t !== 'dark' && t !== 'light') t = matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+        document.documentElement.setAttribute('data-theme', t)
+        document.documentElement.style.colorScheme = t
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', t === 'light' ? '#F6F6F8' : '#0B0B0F')
+      } catch (e) {}
+    </script>
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/pic3.png" />
   </head>
