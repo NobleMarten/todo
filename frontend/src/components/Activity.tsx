@@ -1,5 +1,6 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { DayCounts } from '../hooks/useActivity'
+import { useElementWidth } from '../hooks/useElementWidth'
 import { dateKey, pluralTasks } from '../lib/format'
 import { SkeletonBlock } from './Skeleton'
 
@@ -46,23 +47,6 @@ interface Column {
   cells: Cell[]
 }
 
-/** Track the grid's rendered width so the number of week-columns adapts to the screen. */
-function useElementWidth<T extends HTMLElement>() {
-  const ref = useRef<T>(null)
-  const [width, setWidth] = useState(0)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    setWidth(el.clientWidth)
-    const ro = new ResizeObserver((entries) => {
-      for (const e of entries) setWidth(e.contentRect.width)
-    })
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [])
-  return [ref, width] as const
-}
-
 export function Activity({ counts, loading, error, onReload }: Props) {
   const [wrapRef, width] = useElementWidth<HTMLDivElement>()
   const [tip, setTip] = useState<{ left: number; top: number; text: string } | null>(null)
@@ -104,13 +88,13 @@ export function Activity({ counts, loading, error, onReload }: Props) {
   // Month label shown on the first column that opens a new month.
   const monthLabels = useMemo(() => {
     let prev = -1
-    return columns.map((col) => {
+    return columns.map((col, i) => {
       const m = col.start.getMonth()
-      if (m !== prev) {
-        prev = m
-        return MONTHS_SHORT[m]
-      }
-      return ''
+      if (m === prev) return ''
+      prev = m
+      // хвост месяца в первой колонке не подписываем, если следующий начинается через 1–2 колонки: слипнется
+      const next = columns.slice(i + 1, i + 3).some((c) => c.start.getMonth() !== m)
+      return i === 0 && next ? '' : MONTHS_SHORT[m]
     })
   }, [columns])
 
