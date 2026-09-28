@@ -6,6 +6,9 @@ import './index.css'
 import App from './App'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
+// Safari не слушает user-scalable=no для пинча, но уважает preventDefault у gesture-событий
+for (const type of ['gesturestart', 'gesturechange']) document.addEventListener(type, (e) => e.preventDefault())
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>

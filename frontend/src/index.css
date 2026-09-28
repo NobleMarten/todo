@@ -3,6 +3,9 @@
 /* ── reset ──────────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* двойной тап не зумит; пан и прокрутка остаются браузеру (у .swipe-body свой pan-y, у .grip — none) */
+html { touch-action: manipulation; }
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -14,7 +17,9 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-button, input, textarea { font: inherit; color: inherit; }
+button, input, textarea, select { font: inherit; color: inherit; }
+/* страховка: iOS зумит страницу при фокусе на поле мельче 16px (body — 14px) */
+input, textarea, select { font-size: max(16px, 1em); }
 button { background: none; border: none; cursor: pointer; }
 a { color: inherit; text-decoration: none; }
 ul { list-style: none; }
@@ -699,7 +704,8 @@ ul { list-style: none; }
   background: var(--surface-2);
   border-top: 1px solid var(--border);
 }
-.quick-add-row { display: flex; align-items: center; gap: 10px; }
+/* width: у .quick-add align-items: center, без неё ряд сжимается до содержимого */
+.quick-add-row { width: 100%; display: flex; align-items: center; gap: 10px; }
 .quick-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
 .quick-chip { min-height: 26px; gap: 6px; color: var(--text-dim); pointer-events: none; }
 .quick-chip svg { width: 11px; height: 11px; }
@@ -911,6 +917,8 @@ ul { list-style: none; }
   height: 100%;
   opacity: 0;
   cursor: pointer;
+  /* поле невидимо, но iOS зумит при фокусе, если шрифт меньше 16px */
+  font-size: 16px;
 }
 
 .card-section { display: flex; flex-direction: column; gap: 10px; }
