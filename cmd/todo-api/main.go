@@ -46,6 +46,16 @@ func main() {
 
 	repo := storage.NewPostgresRepo(db)
 
+	// `todo-api user …` — завести пользователя или сменить пароль и выйти, сервер не поднимается
+	if len(os.Args) > 1 && os.Args[1] == "user" {
+		err := runUser(context.Background(), repo, os.Args[2:], os.Stdin, os.Stdout)
+		_ = db.Close()
+		if err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	h := transport.NewHandler(
 		service.NewTaskService(repo, repo, cfg.Loc),
 		service.NewProjectService(repo, cfg.Loc),
@@ -54,11 +64,9 @@ func main() {
 
 	mux := transport.NewRouter(h)
 
-	guard := auth.New(cfg.Password)
-	transport.RegisterAuth(mux, guard)
-	if !guard.Enabled() {
-		log.Println("WARNING: APP_PASSWORD is empty — API is open to anyone who can reach it")
-	}
+	// вход по логину и паролю, сессии в базе; пользователей заводит `todo-api user add`
+	authSvc := auth.New(repo)
+	transport.RegisterAuth(mux, authSvc)
 
 	// Liveness-проба для Docker healthcheck: намеренно не трогает БД.
 	// Отвечает «процесс жив и обслуживает HTTP»; недоступность Postgres —
@@ -71,8 +79,8 @@ func main() {
 	// Запускаем HTTP-сервер на порту 8080.
 
 	srv := &http.Server{ // Создаем новый HTTP-сервер.
-		Addr:    ":" + cfg.Port,                                    // Указываем адрес и порт, на котором будет работать сервер (например, ":8080").
-		Handler: corsMiddleware(transport.RequireAuth(guard, mux)), // Устанавливаем обработчик для сервера, который будет обрабатывать входящие HTTP-запросы. В данном случае, мы оборачиваем наш mux в corsMiddleware, чтобы добавить поддержку CORS (Cross-Origin Resource Sharing).
+		Addr:    ":" + cfg.Port,                                      // Указываем адрес и порт, на котором будет работать сервер (например, ":8080").
+		Handler: corsMiddleware(transport.RequireAuth(authSvc, mux)), // Устанавливаем обработчик для сервера, который будет обрабатывать входящие HTTP-запросы. В данном случае, мы оборачиваем наш mux в corsMiddleware, чтобы добавить поддержку CORS (Cross-Origin Resource Sharing).
 	}
 
 	// log.Fatal(http.ListenAndServe(srv.Addr, srv.Handler))

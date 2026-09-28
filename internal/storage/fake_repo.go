@@ -1,8 +1,10 @@
 package storage
 
 import (
+	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -13,17 +15,32 @@ import (
 // FakeRepo — хранилище в памяти для тестов сервиса и хендлеров.
 // Повторяет семантику PostgresRepo: те же условия TaskFilter, та же сортировка,
 // каскад подзадач при удалении и переносе в другой список.
+// Задачи и списки разных пользователей лежат вместе и различаются по UserID — как в базе.
 type FakeRepo struct {
 	mu       sync.Mutex
 	Tasks    []model.Task
 	Projects []model.Project
+	Users    []model.User
+	Sessions []FakeSession
 	Now      func() time.Time // по умолчанию time.Now; тесты подменяют, чтобы зафиксировать время
+}
+
+// FakeSession — строка таблицы sessions.
+type FakeSession struct {
+	TokenHash []byte
+	UserID    int
+	Expires   time.Time
 }
 
 var (
 	_ TaskRepo    = (*FakeRepo)(nil)
 	_ ProjectRepo = (*FakeRepo)(nil)
+	_ UserRepo    = (*FakeRepo)(nil)
 )
+
+// errForeignRef — то, что в Postgres сделали бы составные внешние ключи (миграция 00008):
+// задачу нельзя положить в чужой список или сделать подзадачей чужой задачи.
+var errForeignRef = errors.New("fake: reference to another user's row violates foreign key")
 
 func (fr *FakeRepo) now() time.Time {
 	if fr.Now != nil {
@@ -32,8 +49,20 @@ func (fr *FakeRepo) now() time.Time {
 	return time.Now()
 }
 
-func (fr *FakeRepo) taskIndex(id int) int {
-	return slices.IndexFunc(fr.Tasks, func(t model.Task) bool { return t.ID == id })
+// taskIndex ищет задачу пользователя: чужая для него не существует.
+func (fr *FakeRepo) taskIndex(userID, id int) int {
+	return slices.IndexFunc(fr.Tasks, func(t model.Task) bool { return t.ID == id && t.UserID == userID })
+}
+
+// checkRefs — список и родитель должны принадлежать тому же пользователю (внешние ключи в базе).
+func (fr *FakeRepo) checkRefs(userID int, projectID, parentID *int) error {
+	if projectID != nil && fr.projectIndex(userID, *projectID) < 0 {
+		return errForeignRef
+	}
+	if parentID != nil && fr.taskIndex(userID, *parentID) < 0 {
+		return errForeignRef
+	}
+	return nil
 }
 
 func (fr *FakeRepo) stats(id int) *model.Stats {
@@ -49,18 +78,24 @@ func (fr *FakeRepo) stats(id int) *model.Stats {
 	return &s
 }
 
-func (fr *FakeRepo) CreateTask(_ context.Context, nt NewTask) (model.Task, error) {
+func (fr *FakeRepo) CreateTask(_ context.Context, userID int, nt NewTask) (model.Task, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
+	if err := fr.checkRefs(userID, nt.ProjectID, nt.ParentID); err != nil {
+		return model.Task{}, err
+	}
 	id, pos := 1, 1
 	for _, t := range fr.Tasks {
 		id = max(id, t.ID+1)
-		pos = max(pos, t.Position+1)
+		if t.UserID == userID {
+			pos = max(pos, t.Position+1)
+		}
 	}
 	now := fr.now()
 	task := model.Task{
 		ID:           id,
+		UserID:       userID,
 		Title:        nt.Title,
 		Priority:     nt.Priority,
 		ProjectID:    clonePtr(nt.ProjectID),
@@ -78,14 +113,14 @@ func (fr *FakeRepo) CreateTask(_ context.Context, nt NewTask) (model.Task, error
 	return task, nil
 }
 
-func (fr *FakeRepo) GetTask(_ context.Context, id int) (model.Task, error) {
+func (fr *FakeRepo) GetTask(_ context.Context, userID, id int) (model.Task, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
-	return fr.getTask(id)
+	return fr.getTask(userID, id)
 }
 
-func (fr *FakeRepo) getTask(id int) (model.Task, error) {
-	i := fr.taskIndex(id)
+func (fr *FakeRepo) getTask(userID, id int) (model.Task, error) {
+	i := fr.taskIndex(userID, id)
 	if i < 0 {
 		return model.Task{}, model.ErrNotFound
 	}
@@ -94,13 +129,13 @@ func (fr *FakeRepo) getTask(id int) (model.Task, error) {
 	return task, nil
 }
 
-func (fr *FakeRepo) ListTasks(_ context.Context, q TaskQuery) ([]model.Task, int, error) {
+func (fr *FakeRepo) ListTasks(_ context.Context, userID int, q TaskQuery) ([]model.Task, int, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	items := []model.Task{}
 	for _, t := range fr.Tasks {
-		if t.ParentID == nil && matches(t, q.Filter) {
+		if t.UserID == userID && t.ParentID == nil && matches(t, q.Filter) {
 			t.SubtaskStats = fr.stats(t.ID)
 			items = append(items, t)
 		}
@@ -115,13 +150,13 @@ func (fr *FakeRepo) ListTasks(_ context.Context, q TaskQuery) ([]model.Task, int
 	return items, total, nil
 }
 
-func (fr *FakeRepo) Subtasks(_ context.Context, parentID int) ([]model.Task, error) {
+func (fr *FakeRepo) Subtasks(_ context.Context, userID, parentID int) ([]model.Task, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	subs := []model.Task{}
 	for _, t := range fr.Tasks {
-		if t.ParentID != nil && *t.ParentID == parentID {
+		if t.UserID == userID && t.ParentID != nil && *t.ParentID == parentID {
 			subs = append(subs, t)
 		}
 	}
@@ -129,13 +164,23 @@ func (fr *FakeRepo) Subtasks(_ context.Context, parentID int) ([]model.Task, err
 	return subs, nil
 }
 
-func (fr *FakeRepo) PatchTask(_ context.Context, id int, p TaskPatch) (model.Task, error) {
+func (fr *FakeRepo) PatchTask(_ context.Context, userID, id int, p TaskPatch) (model.Task, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
-	i := fr.taskIndex(id)
+	i := fr.taskIndex(userID, id)
 	if i < 0 {
 		return model.Task{}, model.ErrNotFound
+	}
+	var projectID, parentID *int
+	if p.ProjectID.Set {
+		projectID = p.ProjectID.Value
+	}
+	if p.ParentID.Set {
+		parentID = p.ParentID.Value
+	}
+	if err := fr.checkRefs(userID, projectID, parentID); err != nil {
+		return model.Task{}, err
 	}
 	now := fr.now()
 	t := &fr.Tasks[i]
@@ -156,7 +201,7 @@ func (fr *FakeRepo) PatchTask(_ context.Context, id int, p TaskPatch) (model.Tas
 	if p.ProjectID.Set {
 		t.ProjectID = clonePtr(p.ProjectID.Value)
 		for j := range fr.Tasks {
-			if pid := fr.Tasks[j].ParentID; pid != nil && *pid == id {
+			if pid := fr.Tasks[j].ParentID; pid != nil && *pid == id && fr.Tasks[j].UserID == userID {
 				fr.Tasks[j].ProjectID = clonePtr(p.ProjectID.Value)
 			}
 		}
@@ -176,48 +221,48 @@ func (fr *FakeRepo) PatchTask(_ context.Context, id int, p TaskPatch) (model.Tas
 	if p.Repeat.Set {
 		t.Repeat = clonePtr(p.Repeat.Value)
 	}
-	return fr.getTask(id)
+	return fr.getTask(userID, id)
 }
 
 // DeleteTask удаляет и подзадачи — как ON DELETE CASCADE.
-func (fr *FakeRepo) DeleteTask(_ context.Context, id int) error {
+func (fr *FakeRepo) DeleteTask(_ context.Context, userID, id int) error {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
-	if fr.taskIndex(id) < 0 {
+	if fr.taskIndex(userID, id) < 0 {
 		return model.ErrNotFound
 	}
 	fr.Tasks = slices.DeleteFunc(fr.Tasks, func(t model.Task) bool {
-		return t.ID == id || (t.ParentID != nil && *t.ParentID == id)
+		return t.UserID == userID && (t.ID == id || (t.ParentID != nil && *t.ParentID == id))
 	})
 	return nil
 }
 
-func (fr *FakeRepo) ReorderTasks(_ context.Context, scope TaskFilter, ids []int) error {
+func (fr *FakeRepo) ReorderTasks(_ context.Context, userID int, scope TaskFilter, ids []int) error {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	for pos, id := range ids {
-		if i := fr.taskIndex(id); i >= 0 && fr.Tasks[i].ParentID == nil && matches(fr.Tasks[i], scope) {
+		if i := fr.taskIndex(userID, id); i >= 0 && fr.Tasks[i].ParentID == nil && matches(fr.Tasks[i], scope) {
 			fr.Tasks[i].Position = pos
 		}
 	}
 	return nil
 }
 
-func (fr *FakeRepo) PlanDay(_ context.Context, date model.Date, add, remove []int) error {
+func (fr *FakeRepo) PlanDay(_ context.Context, userID int, date model.Date, add, remove []int) error {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	now := fr.now()
 	for _, id := range add {
-		if i := fr.taskIndex(id); i >= 0 && !fr.Tasks[i].Done && fr.Tasks[i].ParentID == nil {
+		if i := fr.taskIndex(userID, id); i >= 0 && !fr.Tasks[i].Done && fr.Tasks[i].ParentID == nil {
 			fr.Tasks[i].ScheduledFor = &date
 			fr.Tasks[i].UpdatedAt = now
 		}
 	}
 	for _, id := range remove {
-		if i := fr.taskIndex(id); i >= 0 && eqPtr(fr.Tasks[i].ScheduledFor, date) {
+		if i := fr.taskIndex(userID, id); i >= 0 && eqPtr(fr.Tasks[i].ScheduledFor, date) {
 			fr.Tasks[i].ScheduledFor = nil
 			fr.Tasks[i].UpdatedAt = now
 		}
@@ -225,13 +270,13 @@ func (fr *FakeRepo) PlanDay(_ context.Context, date model.Date, add, remove []in
 	return nil
 }
 
-func (fr *FakeRepo) DoneActivity(_ context.Context, days DateRange, loc *time.Location) ([]model.DayCount, error) {
+func (fr *FakeRepo) DoneActivity(_ context.Context, userID int, days DateRange, loc *time.Location) ([]model.DayCount, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	counts := map[model.Date]int{}
 	for _, t := range fr.Tasks {
-		if !t.Done || t.DoneAt == nil || t.ParentID != nil {
+		if t.UserID != userID || !t.Done || t.DoneAt == nil || t.ParentID != nil {
 			continue
 		}
 		d := model.DateOf(t.DoneAt.In(loc))
@@ -247,13 +292,13 @@ func (fr *FakeRepo) DoneActivity(_ context.Context, days DateRange, loc *time.Lo
 	return out, nil
 }
 
-func (fr *FakeRepo) ListProjects(_ context.Context, includeArchived bool, today model.Date) ([]model.Project, error) {
+func (fr *FakeRepo) ListProjects(_ context.Context, userID int, includeArchived bool, today model.Date) ([]model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	out := []model.Project{}
 	for _, p := range fr.Projects {
-		if p.Archived && !includeArchived {
+		if p.UserID != userID || (p.Archived && !includeArchived) {
 			continue
 		}
 		var c model.ProjectCounts
@@ -275,40 +320,42 @@ func (fr *FakeRepo) ListProjects(_ context.Context, includeArchived bool, today 
 	return out, nil
 }
 
-func (fr *FakeRepo) projectIndex(id int) int {
-	return slices.IndexFunc(fr.Projects, func(p model.Project) bool { return p.ID == id })
+func (fr *FakeRepo) projectIndex(userID, id int) int {
+	return slices.IndexFunc(fr.Projects, func(p model.Project) bool { return p.ID == id && p.UserID == userID })
 }
 
-func (fr *FakeRepo) GetProject(_ context.Context, id int) (model.Project, error) {
+func (fr *FakeRepo) GetProject(_ context.Context, userID, id int) (model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
-	i := fr.projectIndex(id)
+	i := fr.projectIndex(userID, id)
 	if i < 0 {
 		return model.Project{}, model.ErrProjectNotFound
 	}
 	return fr.Projects[i], nil
 }
 
-func (fr *FakeRepo) CreateProject(_ context.Context, name, color string) (model.Project, error) {
+func (fr *FakeRepo) CreateProject(_ context.Context, userID int, name, color string) (model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	id, pos := 1, 1
 	for _, p := range fr.Projects {
 		id = max(id, p.ID+1)
-		pos = max(pos, p.Position+1)
+		if p.UserID == userID {
+			pos = max(pos, p.Position+1)
+		}
 	}
-	p := model.Project{ID: id, Name: name, Color: color, Position: pos, CreatedAt: fr.now()}
+	p := model.Project{ID: id, UserID: userID, Name: name, Color: color, Position: pos, CreatedAt: fr.now()}
 	fr.Projects = append(fr.Projects, p)
 	return p, nil
 }
 
-func (fr *FakeRepo) PatchProject(_ context.Context, id int, patch ProjectPatch) (model.Project, error) {
+func (fr *FakeRepo) PatchProject(_ context.Context, userID, id int, patch ProjectPatch) (model.Project, error) {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
-	i := fr.projectIndex(id)
+	i := fr.projectIndex(userID, id)
 	if i < 0 {
 		return model.Project{}, model.ErrProjectNotFound
 	}
@@ -326,32 +373,138 @@ func (fr *FakeRepo) PatchProject(_ context.Context, id int, patch ProjectPatch) 
 }
 
 // DeleteProject отправляет задачи списка во «Входящие» — как ON DELETE SET NULL.
-func (fr *FakeRepo) DeleteProject(_ context.Context, id int) error {
+func (fr *FakeRepo) DeleteProject(_ context.Context, userID, id int) error {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
-	i := fr.projectIndex(id)
+	i := fr.projectIndex(userID, id)
 	if i < 0 {
 		return model.ErrProjectNotFound
 	}
 	fr.Projects = slices.Delete(fr.Projects, i, i+1)
 	for j := range fr.Tasks {
-		if eqPtr(fr.Tasks[j].ProjectID, id) {
+		if fr.Tasks[j].UserID == userID && eqPtr(fr.Tasks[j].ProjectID, id) {
 			fr.Tasks[j].ProjectID = nil
 		}
 	}
 	return nil
 }
 
-func (fr *FakeRepo) ReorderProjects(_ context.Context, ids []int) error {
+func (fr *FakeRepo) ReorderProjects(_ context.Context, userID int, ids []int) error {
 	fr.mu.Lock()
 	defer fr.mu.Unlock()
 
 	for pos, id := range ids {
-		if i := fr.projectIndex(id); i >= 0 {
+		if i := fr.projectIndex(userID, id); i >= 0 {
 			fr.Projects[i].Position = pos
 		}
 	}
+	return nil
+}
+
+// ── пользователи и сессии ──────────────────────────────────────────────────────
+
+func (fr *FakeRepo) CreateUser(_ context.Context, login, passwordHash string) (model.User, error) {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	id := 1
+	for _, u := range fr.Users {
+		if u.Login == login {
+			return model.User{}, model.ErrLoginTaken
+		}
+		id = max(id, u.ID+1)
+	}
+	u := model.User{ID: id, Login: login, PasswordHash: passwordHash, CreatedAt: fr.now()}
+	fr.Users = append(fr.Users, u)
+	return u, nil
+}
+
+func (fr *FakeRepo) UserByLogin(_ context.Context, login string) (model.User, error) {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	for _, u := range fr.Users {
+		if u.Login == login {
+			return u, nil
+		}
+	}
+	return model.User{}, model.ErrUserNotFound
+}
+
+func (fr *FakeRepo) SetPassword(_ context.Context, userID int, passwordHash string) error {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	for i := range fr.Users {
+		if fr.Users[i].ID == userID {
+			fr.Users[i].PasswordHash = passwordHash
+			return nil
+		}
+	}
+	return model.ErrUserNotFound
+}
+
+func (fr *FakeRepo) ListUsers(_ context.Context) ([]model.User, error) {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+	return slices.Clone(fr.Users), nil
+}
+
+func (fr *FakeRepo) CreateSession(_ context.Context, userID int, tokenHash []byte, expires time.Time) error {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	now := fr.now()
+	fr.Sessions = slices.DeleteFunc(fr.Sessions, func(s FakeSession) bool { return !s.Expires.After(now) })
+	fr.Sessions = append(fr.Sessions, FakeSession{TokenHash: slices.Clone(tokenHash), UserID: userID, Expires: expires})
+	return nil
+}
+
+func (fr *FakeRepo) sessionIndex(tokenHash []byte) int {
+	return slices.IndexFunc(fr.Sessions, func(s FakeSession) bool { return bytes.Equal(s.TokenHash, tokenHash) })
+}
+
+func (fr *FakeRepo) SessionUser(_ context.Context, tokenHash []byte, now time.Time) (model.User, time.Time, error) {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	i := fr.sessionIndex(tokenHash)
+	if i < 0 || !fr.Sessions[i].Expires.After(now) {
+		return model.User{}, time.Time{}, model.ErrUnauthorized
+	}
+	s := fr.Sessions[i]
+	for _, u := range fr.Users {
+		if u.ID == s.UserID {
+			return u, s.Expires, nil
+		}
+	}
+	return model.User{}, time.Time{}, model.ErrUnauthorized
+}
+
+func (fr *FakeRepo) ExtendSession(_ context.Context, tokenHash []byte, expires time.Time) error {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	if i := fr.sessionIndex(tokenHash); i >= 0 {
+		fr.Sessions[i].Expires = expires
+	}
+	return nil
+}
+
+func (fr *FakeRepo) DeleteSession(_ context.Context, tokenHash []byte) error {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	fr.Sessions = slices.DeleteFunc(fr.Sessions, func(s FakeSession) bool { return bytes.Equal(s.TokenHash, tokenHash) })
+	return nil
+}
+
+func (fr *FakeRepo) DeleteUserSessions(_ context.Context, userID int) error {
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+
+	fr.Sessions = slices.DeleteFunc(fr.Sessions, func(s FakeSession) bool { return s.UserID == userID })
 	return nil
 }
 

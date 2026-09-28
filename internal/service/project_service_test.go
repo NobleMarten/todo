@@ -13,7 +13,7 @@ func TestProjectCreate(t *testing.T) {
 	ctx := context.Background()
 	s := NewProjectService(&storage.FakeRepo{}, msk)
 
-	p, err := s.Create(ctx, "  Go  ", "")
+	p, err := s.Create(ctx, u1, "  Go  ", "")
 	if err != nil || p.Name != "Go" || p.Color != defaultProjectColor {
 		t.Fatalf("got %+v, %v", p, err)
 	}
@@ -28,7 +28,7 @@ func TestProjectCreate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := s.Create(ctx, tt.in, tt.color); !errors.Is(err, tt.err) {
+			if _, err := s.Create(ctx, u1, tt.in, tt.color); !errors.Is(err, tt.err) {
 				t.Fatalf("err = %v, want %v", err, tt.err)
 			}
 		})
@@ -39,10 +39,10 @@ func TestProjectPatchDeleteReorder(t *testing.T) {
 	ctx := context.Background()
 	repo := &storage.FakeRepo{}
 	s := NewProjectService(repo, msk)
-	a, _ := s.Create(ctx, "a", "#111111")
-	b, _ := s.Create(ctx, "b", "#222222")
+	a, _ := s.Create(ctx, u1, "a", "#111111")
+	b, _ := s.Create(ctx, u1, "b", "#222222")
 
-	got, err := s.Patch(ctx, a.ID, storage.ProjectPatch{Name: ptr(" aa "), Color: ptr("#abcdef")})
+	got, err := s.Patch(ctx, u1, a.ID, storage.ProjectPatch{Name: ptr(" aa "), Color: ptr("#abcdef")})
 	if err != nil || got.Name != "aa" || got.Color != "#abcdef" {
 		t.Fatalf("patch: %+v, %v", got, err)
 	}
@@ -59,38 +59,38 @@ func TestProjectPatchDeleteReorder(t *testing.T) {
 		{"not found", 999, storage.ProjectPatch{Archived: ptr(true)}, model.ErrProjectNotFound},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := s.Patch(ctx, tc.id, tc.patch); !errors.Is(err, tc.err) {
+			if _, err := s.Patch(ctx, u1, tc.id, tc.patch); !errors.Is(err, tc.err) {
 				t.Fatalf("err = %v, want %v", err, tc.err)
 			}
 		})
 	}
 
-	if err := s.Reorder(ctx, []int{b.ID, a.ID, b.ID}); err != nil {
+	if err := s.Reorder(ctx, u1, []int{b.ID, a.ID, b.ID}); err != nil {
 		t.Fatal(err)
 	}
-	list, _ := s.List(ctx, false, &d0)
+	list, _ := s.List(ctx, u1, false, &d0)
 	if ids := []int{list[0].ID, list[1].ID}; !slices.Equal(ids, []int{b.ID, a.ID}) {
 		t.Fatalf("order = %v", ids)
 	}
 
 	// архивный список виден только с archived=true
-	if _, err := s.Patch(ctx, b.ID, storage.ProjectPatch{Archived: ptr(true)}); err != nil {
+	if _, err := s.Patch(ctx, u1, b.ID, storage.ProjectPatch{Archived: ptr(true)}); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := s.List(ctx, false, nil); len(list) != 1 {
+	if list, _ := s.List(ctx, u1, false, nil); len(list) != 1 {
 		t.Fatalf("active = %d, want 1", len(list))
 	}
-	if list, _ := s.List(ctx, true, nil); len(list) != 2 {
+	if list, _ := s.List(ctx, u1, true, nil); len(list) != 2 {
 		t.Fatalf("all = %d, want 2", len(list))
 	}
 
-	if err := s.Delete(ctx, a.ID); err != nil {
+	if err := s.Delete(ctx, u1, a.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.Delete(ctx, a.ID); !errors.Is(err, model.ErrProjectNotFound) {
+	if err := s.Delete(ctx, u1, a.ID); !errors.Is(err, model.ErrProjectNotFound) {
 		t.Fatalf("second delete: %v", err)
 	}
-	if err := s.Delete(ctx, 0); !errors.Is(err, model.ErrInvalidID) {
+	if err := s.Delete(ctx, u1, 0); !errors.Is(err, model.ErrInvalidID) {
 		t.Fatalf("id 0: %v", err)
 	}
 }

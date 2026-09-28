@@ -124,13 +124,13 @@ func parseListQuery(r *http.Request) (service.ListQuery, error) {
 }
 
 // ListTasks — GET /tasks?view=...: только корневые задачи, total посчитан до пагинации.
-func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request, userID int) {
 	lq, err := parseListQuery(r)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	items, total, err := h.tasks.List(r.Context(), lq)
+	items, total, err := h.tasks.List(r.Context(), userID, lq)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -139,13 +139,13 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 }
 
 // TaskCounts — GET /tasks/counts?today=: {"today": 3, "week": 5, …} для экрана «Списки».
-func (h *Handler) TaskCounts(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) TaskCounts(w http.ResponseWriter, r *http.Request, userID int) {
 	today, err := queryDate(r.URL.Query(), "today")
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	counts, err := h.tasks.Counts(r.Context(), today)
+	counts, err := h.tasks.Counts(r.Context(), userID, today)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -154,13 +154,13 @@ func (h *Handler) TaskCounts(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetTask — GET /tasks/{id}: задача вместе с подзадачами.
-func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request, userID int) {
 	id, err := pathID(r)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	task, err := h.tasks.Get(r.Context(), id)
+	task, err := h.tasks.Get(r.Context(), userID, id)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -172,13 +172,13 @@ func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, TaskDetailResponse{Task: task, Subtasks: subtasks})
 }
 
-func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request, userID int) {
 	var req CreateTaskRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		WriteError(w, err)
 		return
 	}
-	task, err := h.tasks.Add(r.Context(), storage.NewTask{
+	task, err := h.tasks.Add(r.Context(), userID, storage.NewTask{
 		Title:        req.Title,
 		Priority:     req.Priority,
 		ProjectID:    req.ProjectID,
@@ -194,7 +194,7 @@ func (h *Handler) CreateTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, task)
 }
 
-func (h *Handler) PatchTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PatchTask(w http.ResponseWriter, r *http.Request, userID int) {
 	id, err := pathID(r)
 	if err != nil {
 		WriteError(w, err)
@@ -210,7 +210,7 @@ func (h *Handler) PatchTask(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, err)
 		return
 	}
-	task, err := h.tasks.Patch(r.Context(), id, patch)
+	task, err := h.tasks.Patch(r.Context(), userID, id, patch)
 	if err != nil {
 		WriteError(w, err)
 		return
@@ -218,26 +218,26 @@ func (h *Handler) PatchTask(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, task)
 }
 
-func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) DeleteTask(w http.ResponseWriter, r *http.Request, userID int) {
 	id, err := pathID(r)
 	if err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err := h.tasks.Delete(r.Context(), id); err != nil {
+	if err := h.tasks.Delete(r.Context(), userID, id); err != nil {
 		WriteError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *Handler) ReorderTasks(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ReorderTasks(w http.ResponseWriter, r *http.Request, userID int) {
 	var req ReorderTasksRequest
 	if err := decodeJSON(w, r, &req); err != nil {
 		WriteError(w, err)
 		return
 	}
-	if err := h.tasks.Reorder(r.Context(), req.Scope, req.IDs); err != nil {
+	if err := h.tasks.Reorder(r.Context(), userID, req.Scope, req.IDs); err != nil {
 		WriteError(w, err)
 		return
 	}

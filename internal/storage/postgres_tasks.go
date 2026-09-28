@@ -24,7 +24,7 @@ func NewPostgresRepo(db *sql.DB) *PostgresRepo {
 
 // taskColumns — порядок колонок, который ожидает scanTask. Все запросы задач идут с алиасом t.
 const taskColumns = "t.id, t.title, t.done, t.priority, t.project_id, t.parent_id, t.due_date, t.scheduled_for, " +
-	"t.position, t.note, t.created_at, t.done_at, t.updated_at, t.repeat"
+	"t.position, t.note, t.created_at, t.done_at, t.updated_at, t.repeat, t.user_id"
 
 // statsJoin добавляет к строке задачи прогресс её подзадач (по индексу tasks(parent_id)).
 const statsJoin = ` LEFT JOIN LATERAL (
@@ -45,7 +45,8 @@ type queryer interface {
 func scanTask(row rowScanner, extra ...any) (model.Task, error) {
 	var task model.Task
 	dest := []any{&task.ID, &task.Title, &task.Done, &task.Priority, &task.ProjectID, &task.ParentID,
-		&task.DueDate, &task.ScheduledFor, &task.Position, &task.Note, &task.CreatedAt, &task.DoneAt, &task.UpdatedAt, &task.Repeat}
+		&task.DueDate, &task.ScheduledFor, &task.Position, &task.Note, &task.CreatedAt, &task.DoneAt, &task.UpdatedAt, &task.Repeat,
+		&task.UserID}
 	err := row.Scan(append(dest, extra...)...)
 	return task, err
 }
@@ -61,13 +62,14 @@ func scanTaskWithStats(row rowScanner) (model.Task, error) {
 	return task, nil
 }
 
-func (pr *PostgresRepo) CreateTask(ctx context.Context, nt NewTask) (model.Task, error) {
+func (pr *PostgresRepo) CreateTask(ctx context.Context, userID int, nt NewTask) (model.Task, error) {
 	// новая задача встаёт в конец любого списка, куда попадёт
-	query := `INSERT INTO tasks AS t (title, priority, project_id, parent_id, due_date, scheduled_for, note, repeat, position)
-		VALUES (@title, @priority, @project_id, @parent_id, @due_date, @scheduled_for, @note, @repeat,
-			(SELECT COALESCE(MAX(position), 0) + 1 FROM tasks))
+	query := `INSERT INTO tasks AS t (user_id, title, priority, project_id, parent_id, due_date, scheduled_for, note, repeat, position)
+		VALUES (@user_id, @title, @priority, @project_id, @parent_id, @due_date, @scheduled_for, @note, @repeat,
+			(SELECT COALESCE(MAX(position), 0) + 1 FROM tasks WHERE user_id = @user_id))
 		RETURNING ` + taskColumns
 	args := pgx.NamedArgs{
+		"user_id":       userID,
 		"title":         nt.Title,
 		"priority":      nt.Priority,
 		"project_id":    nt.ProjectID,
@@ -85,12 +87,13 @@ func (pr *PostgresRepo) CreateTask(ctx context.Context, nt NewTask) (model.Task,
 	return task, nil
 }
 
-func (pr *PostgresRepo) GetTask(ctx context.Context, id int) (model.Task, error) {
-	return getTask(ctx, pr.db, id)
+func (pr *PostgresRepo) GetTask(ctx context.Context, userID, id int) (model.Task, error) {
+	return getTask(ctx, pr.db, userID, id)
 }
 
-func getTask(ctx context.Context, q queryer, id int) (model.Task, error) {
-	row := q.QueryRowContext(ctx, "SELECT "+taskColumns+", s.done, s.total FROM tasks t"+statsJoin+" WHERE t.id = $1", id)
+func getTask(ctx context.Context, q queryer, userID, id int) (model.Task, error) {
+	row := q.QueryRowContext(ctx, "SELECT "+taskColumns+", s.done, s.total FROM tasks t"+statsJoin+
+		" WHERE t.id = $1 AND t.user_id = $2", id, userID)
 	task, err := scanTaskWithStats(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.Task{}, model.ErrNotFound
@@ -98,9 +101,9 @@ func getTask(ctx context.Context, q queryer, id int) (model.Task, error) {
 	return task, err
 }
 
-func (pr *PostgresRepo) ListTasks(ctx context.Context, q TaskQuery) ([]model.Task, int, error) {
-	args := pgx.NamedArgs{}
-	where := "WHERE " + strings.Join(append([]string{"t.parent_id IS NULL"}, filterConds(q.Filter, args)...), " AND ")
+func (pr *PostgresRepo) ListTasks(ctx context.Context, userID int, q TaskQuery) ([]model.Task, int, error) {
+	args := pgx.NamedArgs{"user_id": userID}
+	where := "WHERE " + strings.Join(append([]string{"t.user_id = @user_id", "t.parent_id IS NULL"}, filterConds(q.Filter, args)...), " AND ")
 
 	var total int
 	if err := pr.db.QueryRowContext(ctx, "SELECT count(*) FROM tasks t "+where, args).Scan(&total); err != nil {
@@ -138,9 +141,9 @@ func (pr *PostgresRepo) ListTasks(ctx context.Context, q TaskQuery) ([]model.Tas
 	return tasks, total, nil
 }
 
-func (pr *PostgresRepo) Subtasks(ctx context.Context, parentID int) ([]model.Task, error) {
+func (pr *PostgresRepo) Subtasks(ctx context.Context, userID, parentID int) ([]model.Task, error) {
 	rows, err := pr.db.QueryContext(ctx,
-		"SELECT "+taskColumns+" FROM tasks t WHERE t.parent_id = $1 ORDER BY t.position, t.id", parentID)
+		"SELECT "+taskColumns+" FROM tasks t WHERE t.parent_id = $1 AND t.user_id = $2 ORDER BY t.position, t.id", parentID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -159,9 +162,9 @@ func (pr *PostgresRepo) Subtasks(ctx context.Context, parentID int) ([]model.Tas
 
 // PatchTask собирает UPDATE только из присланных полей: по одному именованному аргументу на поле.
 // COALESCE тут не подходит — он не отличает «не менять» от «поставить null».
-func (pr *PostgresRepo) PatchTask(ctx context.Context, id int, p TaskPatch) (model.Task, error) {
+func (pr *PostgresRepo) PatchTask(ctx context.Context, userID, id int, p TaskPatch) (model.Task, error) {
 	sets := []string{"updated_at = now()"}
-	args := pgx.NamedArgs{"id": id}
+	args := pgx.NamedArgs{"id": id, "user_id": userID}
 
 	if p.Title != nil {
 		sets = append(sets, "title = @title")
@@ -206,7 +209,7 @@ func (pr *PostgresRepo) PatchTask(ctx context.Context, id int, p TaskPatch) (mod
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	res, err := tx.ExecContext(ctx, "UPDATE tasks SET "+strings.Join(sets, ", ")+" WHERE id = @id", args)
+	res, err := tx.ExecContext(ctx, "UPDATE tasks SET "+strings.Join(sets, ", ")+" WHERE id = @id AND user_id = @user_id", args)
 	if err != nil {
 		return model.Task{}, err
 	}
@@ -218,21 +221,21 @@ func (pr *PostgresRepo) PatchTask(ctx context.Context, id int, p TaskPatch) (mod
 
 	// подзадачи живут в том же списке, что и родитель
 	if p.ProjectID.Set {
-		if _, err := tx.ExecContext(ctx, "UPDATE tasks SET project_id = @project_id WHERE parent_id = @id",
-			pgx.NamedArgs{"id": id, "project_id": p.ProjectID.Value}); err != nil {
+		if _, err := tx.ExecContext(ctx, "UPDATE tasks SET project_id = @project_id WHERE parent_id = @id AND user_id = @user_id",
+			pgx.NamedArgs{"id": id, "user_id": userID, "project_id": p.ProjectID.Value}); err != nil {
 			return model.Task{}, err
 		}
 	}
 
-	task, err := getTask(ctx, tx, id)
+	task, err := getTask(ctx, tx, userID, id)
 	if err != nil {
 		return model.Task{}, err
 	}
 	return task, tx.Commit()
 }
 
-func (pr *PostgresRepo) DeleteTask(ctx context.Context, id int) error {
-	res, err := pr.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = $1", id)
+func (pr *PostgresRepo) DeleteTask(ctx context.Context, userID, id int) error {
+	res, err := pr.db.ExecContext(ctx, "DELETE FROM tasks WHERE id = $1 AND user_id = $2", id, userID)
 	if err != nil {
 		return err
 	}
@@ -247,29 +250,29 @@ func (pr *PostgresRepo) DeleteTask(ctx context.Context, id int) error {
 }
 
 // ReorderTasks — один UPDATE, то есть одна транзакция. ordinality нумерует с 1, position — с 0.
-func (pr *PostgresRepo) ReorderTasks(ctx context.Context, scope TaskFilter, ids []int) error {
-	args := pgx.NamedArgs{"ids": ids}
-	conds := append([]string{"t.id = v.id", "t.parent_id IS NULL"}, filterConds(scope, args)...)
+func (pr *PostgresRepo) ReorderTasks(ctx context.Context, userID int, scope TaskFilter, ids []int) error {
+	args := pgx.NamedArgs{"ids": ids, "user_id": userID}
+	conds := append([]string{"t.id = v.id", "t.user_id = @user_id", "t.parent_id IS NULL"}, filterConds(scope, args)...)
 	_, err := pr.db.ExecContext(ctx, `UPDATE tasks t SET position = v.ord - 1
 		FROM unnest(@ids::int[]) WITH ORDINALITY AS v(id, ord)
 		WHERE `+strings.Join(conds, " AND "), args)
 	return err
 }
 
-func (pr *PostgresRepo) PlanDay(ctx context.Context, date model.Date, add, remove []int) error {
+func (pr *PostgresRepo) PlanDay(ctx context.Context, userID int, date model.Date, add, remove []int) error {
 	tx, err := pr.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	args := pgx.NamedArgs{"date": date, "add": add, "remove": remove}
+	args := pgx.NamedArgs{"date": date, "add": add, "remove": remove, "user_id": userID}
 	if _, err := tx.ExecContext(ctx, `UPDATE tasks SET scheduled_for = @date, updated_at = now()
-		WHERE id = ANY(@add::int[]) AND NOT done AND parent_id IS NULL`, args); err != nil {
+		WHERE id = ANY(@add::int[]) AND user_id = @user_id AND NOT done AND parent_id IS NULL`, args); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE tasks SET scheduled_for = NULL, updated_at = now()
-		WHERE id = ANY(@remove::int[]) AND scheduled_for = @date`, args); err != nil {
+		WHERE id = ANY(@remove::int[]) AND user_id = @user_id AND scheduled_for = @date`, args); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -277,14 +280,15 @@ func (pr *PostgresRepo) PlanDay(ctx context.Context, date model.Date, add, remov
 
 // DoneActivity считает только корневые задачи — так же, как done_today в /day,
 // чтобы грид и счётчик «готово» за один день не расходились.
-func (pr *PostgresRepo) DoneActivity(ctx context.Context, days DateRange, loc *time.Location) ([]model.DayCount, error) {
+func (pr *PostgresRepo) DoneActivity(ctx context.Context, userID int, days DateRange, loc *time.Location) ([]model.DayCount, error) {
 	rows, err := pr.db.QueryContext(ctx, `SELECT (done_at AT TIME ZONE @tz)::date AS day, count(*)
 		FROM tasks
-		WHERE done AND parent_id IS NULL AND done_at >= @from AND done_at < @to
+		WHERE user_id = @user_id AND done AND parent_id IS NULL AND done_at >= @from AND done_at < @to
 		GROUP BY day ORDER BY day`, pgx.NamedArgs{
-		"tz":   loc.String(),
-		"from": days.From.Time(loc),
-		"to":   days.To.AddDays(1).Time(loc),
+		"user_id": userID,
+		"tz":      loc.String(),
+		"from":    days.From.Time(loc),
+		"to":      days.To.AddDays(1).Time(loc),
 	})
 	if err != nil {
 		return nil, err

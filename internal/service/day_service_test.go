@@ -28,7 +28,8 @@ func TestDay(t *testing.T) {
 		{ID: 7, Position: 7, Done: true, DoneAt: at("2026-09-20T20:30:00Z")}, // ещё 20.09 по Москве
 		{ID: 8, Position: 8, Done: true, ScheduledFor: &d0, DoneAt: at("2026-09-21T12:00:00Z")},
 	}
-	day, err := NewDayService(repo, msk).Day(ctx, &d0)
+	own(repo)
+	day, err := NewDayService(repo, msk).Day(ctx, u1, &d0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +71,9 @@ func TestSuggestions(t *testing.T) {
 	for i := range 12 {
 		repo.Tasks = append(repo.Tasks, model.Task{ID: 100 + i, UpdatedAt: old.Add(time.Duration(12-i) * time.Hour)})
 	}
+	own(repo)
 
-	got, err := NewDayService(repo, msk).Suggestions(ctx, &d0)
+	got, err := NewDayService(repo, msk).Suggestions(ctx, u1, &d0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,15 +92,16 @@ func TestPlan(t *testing.T) {
 	ctx := context.Background()
 	repo := &storage.FakeRepo{}
 	repo.Tasks = []model.Task{{ID: 1}, {ID: 2, ScheduledFor: &d0}, {ID: 3, Done: true}}
+	own(repo)
 	s := NewDayService(repo, msk)
 
-	if err := s.Plan(ctx, d0, []int{1, 3, 1}, []int{2}); err != nil {
+	if err := s.Plan(ctx, u1, d0, []int{1, 3, 1}, []int{2}); err != nil {
 		t.Fatal(err)
 	}
 	if repo.Tasks[0].ScheduledFor == nil || repo.Tasks[1].ScheduledFor != nil || repo.Tasks[2].ScheduledFor != nil {
 		t.Fatalf("tasks = %+v", repo.Tasks)
 	}
-	if err := s.Plan(ctx, model.Date{}, []int{1}, nil); !errors.Is(err, model.ErrInvalidBody) {
+	if err := s.Plan(ctx, u1, model.Date{}, []int{1}, nil); !errors.Is(err, model.ErrInvalidBody) {
 		t.Fatalf("без даты: %v", err)
 	}
 }
@@ -125,8 +128,9 @@ func TestWeek(t *testing.T) {
 		{ID: 11, Position: 11, Done: true, DoneAt: at("2026-09-20T20:30:00Z")},                     // вс прошлой недели
 		{ID: 12, Position: 0},                                                                      // бэклог, выше по position
 	}
+	own(repo)
 	svc := NewDayService(repo, msk)
-	w, err := svc.Week(ctx, &mon)
+	w, err := svc.Week(ctx, u1, &mon)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +158,7 @@ func TestWeek(t *testing.T) {
 	}
 
 	// без from — понедельник текущей недели в APP_TZ
-	w, err = svc.Week(ctx, nil)
+	w, err = svc.Week(ctx, u1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
