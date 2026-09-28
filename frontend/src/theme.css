@@ -1,5 +1,5 @@
 /* ── дизайн-токены: тёмная тема основная, светлая переопределяет те же имена ──── */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap');
+@import './fonts.css';
 
 :root,
 [data-theme='dark'] {

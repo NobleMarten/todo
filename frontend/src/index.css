@@ -1146,9 +1146,13 @@ ul { list-style: none; }
 .spin { animation: spin .8s linear infinite; }
 
 /* ── scrollbar ──────────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+/* только с мышью: на телефоне стилизованная полоса перестаёт быть «накладной» — WebKit резервирует под неё
+   место, и видимая область (а с ней таб-бар и фон) сжимается на её ширину */
+@media (hover: hover) and (pointer: fine) {
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+}
 
 /* ── activity / contribution grid ───────────────────────────────────────────── */
 :root, [data-theme='dark'] {
