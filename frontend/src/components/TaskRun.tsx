@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
-import { Reorder, useDragControls } from 'framer-motion'
+import { AnimatePresence, Reorder, useDragControls } from 'framer-motion'
 import type { DateStr, Project, Task } from '../api/types'
+import { AnimatedReorderRow, AnimatedRow } from './AnimatedRow'
 import { TaskRow } from './TaskRow'
 
 export interface RunProps {
@@ -39,20 +40,22 @@ export function TaskRun({
     task: t,
     today,
     project: t.project_id !== null ? projectById?.get(t.project_id) : undefined,
-    onToggle: () => onToggle(t),
-    onSetDue: (d: DateStr | null) => onSetDue(t, d),
-    onDelete: onDelete && (() => onDelete(t)),
-    onToday: onToday && (() => onToday(t)),
+    onToggle,
+    onSetDue,
+    onDelete,
+    onToday,
   })
 
   if (!draggable || run.length < 2) {
     return (
       <ul className="task-list">
-        {run.map((t) => (
-          <li key={t.id}>
-            <TaskRow {...rowOf(t)} gripSpace={draggable} />
-          </li>
-        ))}
+        <AnimatePresence initial={false}>
+          {run.map((t) => (
+            <AnimatedRow key={t.id} id={t.id}>
+              <TaskRow {...rowOf(t)} gripSpace={draggable} />
+            </AnimatedRow>
+          ))}
+        </AnimatePresence>
       </ul>
     )
   }
@@ -68,18 +71,20 @@ export function TaskRun({
       }}
       className="task-list"
     >
-      {ids.map((id) => (
-        <DraggableTask
-          key={id}
-          id={id}
-          row={rowOf(byId.get(id)!)}
-          onDrop={() => {
-            if (orderRef.current) onReorder(orderRef.current)
-            orderRef.current = null
-            setOrder(null)
-          }}
-        />
-      ))}
+      <AnimatePresence initial={false}>
+        {ids.map((id) => (
+          <DraggableTask
+            key={id}
+            id={id}
+            row={rowOf(byId.get(id)!)}
+            onDrop={() => {
+              if (orderRef.current) onReorder(orderRef.current)
+              orderRef.current = null
+              setOrder(null)
+            }}
+          />
+        ))}
+      </AnimatePresence>
     </Reorder.Group>
   )
 }
@@ -95,8 +100,8 @@ function DraggableTask({
 }) {
   const controls = useDragControls()
   return (
-    <Reorder.Item value={id} dragListener={false} dragControls={controls} onDragEnd={onDrop} className="reorder-item">
+    <AnimatedReorderRow id={id} controls={controls} onDragEnd={onDrop}>
       <TaskRow {...row} dragControls={controls} />
-    </Reorder.Item>
+    </AnimatedReorderRow>
   )
 }

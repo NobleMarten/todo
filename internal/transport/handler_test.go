@@ -462,3 +462,24 @@ func TestSearchHandler(t *testing.T) {
 	}
 	do(t, h, "GET", "/tasks?q="+strings.Repeat("a", 101), "").expect(t, 400, "INVALID_QUERY")
 }
+
+func TestTaskCountsHandler(t *testing.T) {
+	h, _ := newTestServer(t)
+	createTask(t, h, `{"title":"сегодня","scheduled_for":"2026-09-21"}`)
+	createTask(t, h, `{"title":"просрочена","due_date":"2026-09-20"}`)
+
+	res := do(t, h, "GET", "/tasks/counts?today=2026-09-21", "")
+	res.expect(t, 200, "")
+	var counts map[string]int
+	res.decode(t, &counts)
+	want := map[string]int{"today": 1, "week": 1, "overdue": 1, "all": 2, "inbox": 2}
+	if len(counts) != len(want) {
+		t.Fatalf("counts = %v, want %v", counts, want)
+	}
+	for k, v := range want {
+		if counts[k] != v {
+			t.Fatalf("counts = %v, want %v", counts, want)
+		}
+	}
+	do(t, h, "GET", "/tasks/counts?today=вчера", "").expect(t, 400, "INVALID_DATE")
+}

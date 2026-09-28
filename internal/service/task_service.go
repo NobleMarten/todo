@@ -435,6 +435,23 @@ func (s *TaskService) List(ctx context.Context, q ListQuery) ([]model.Task, int,
 	return s.tasks.ListTasks(ctx, query)
 }
 
+// CountViews — смарт-виды, у которых экран «Списки» показывает счётчики.
+var CountViews = []string{"today", "week", "overdue", "all", "inbox"}
+
+// Counts — число задач в каждом из CountViews (как total у GET /tasks?view=…) одним вызовом:
+// экран «Списки» делал пять запросов с limit=1.
+func (s *TaskService) Counts(ctx context.Context, today *model.Date) (map[string]int, error) {
+	counts := make(map[string]int, len(CountViews))
+	for _, v := range CountViews {
+		_, total, err := s.List(ctx, ListQuery{View: v, Today: today, Limit: 1})
+		if err != nil {
+			return nil, err
+		}
+		counts[v] = total
+	}
+	return counts, nil
+}
+
 // ReorderScope — область, внутри которой переставляются задачи.
 type ReorderScope struct {
 	Type      string      `json:"type"` // project | day | inbox

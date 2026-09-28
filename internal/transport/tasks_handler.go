@@ -138,6 +138,21 @@ func (h *Handler) ListTasks(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, ListTasksResponse{Items: items, Total: total})
 }
 
+// TaskCounts — GET /tasks/counts?today=: {"today": 3, "week": 5, …} для экрана «Списки».
+func (h *Handler) TaskCounts(w http.ResponseWriter, r *http.Request) {
+	today, err := queryDate(r.URL.Query(), "today")
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	counts, err := h.tasks.Counts(r.Context(), today)
+	if err != nil {
+		WriteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, counts)
+}
+
 // GetTask — GET /tasks/{id}: задача вместе с подзадачами.
 func (h *Handler) GetTask(w http.ResponseWriter, r *http.Request) {
 	id, err := pathID(r)

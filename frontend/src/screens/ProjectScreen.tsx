@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
 import { ColorSwatches } from '../components/ProjectPicker'
@@ -14,6 +15,7 @@ import { useProjects } from '../hooks/useProjects'
 import { matchesSpec, reorderScopeOf, useTasks, useWeekProgress, type ListSpec } from '../hooks/useTasks'
 import { todayStr } from '../lib/date'
 import type { QuickParse } from '../lib/quickAdd'
+import { revealTask } from '../lib/reveal'
 import { groupTasks, PROJECT_NAME_MAX, sectionsFor, type Grouping } from '../lib/format'
 
 // подсказка синтаксиса быстрого ввода в пустом списке
@@ -69,6 +71,12 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
   const canAdd = spec.view === 'project' || spec.view === 'inbox' || spec.view === 'all' || spec.view === 'today'
 
   // #список из быстрого ввода важнее текущего списка; в «сегодня» задача ещё и планируется на сегодня (если не задан @день)
+  // одни функции на все строки (TaskRow — memo)
+  const toggleTask = (t: Task) => update(t.id, { done: !t.done })
+  const setDue = (t: Task, d: string | null) => update(t.id, { due_date: d })
+  const removeTask = (t: Task) => remove(t.id)
+  const toToday = (t: Task) => update(t.id, { scheduled_for: today })
+
   const addTask = async (p: QuickParse) => {
     const target = p.project ?? project
     const created = await add({
@@ -80,7 +88,9 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       repeat: p.repeat,
     })
     if (!created) return null
-    return matchesSpec(created, spec, today) ? {} : { hint: `добавлено в «${target?.name ?? 'входящие'}»` }
+    if (!matchesSpec(created, spec, today)) return { hint: `добавлено в «${target?.name ?? 'входящие'}»` }
+    revealTask(created.id)
+    return {}
   }
 
   const tint = project ? ({ '--tint': project.color } as CSSProperties) : undefined
@@ -160,18 +170,19 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
               <div className={`section-label tone-${key}`}>
                 {label} · {list.length}
               </div>
-              {runsOf(list, grouping).map((run) => (
+              {runsOf(list, grouping).map((run, i) => (
                 <TaskRun
-                  key={run[0].id}
+                  // по номеру, а не по первой задаче: ушла первая — отрезок не пересоздаётся и анимирует уход
+                  key={i}
                   run={run}
                   today={today}
                   draggable={draggable}
                   projectById={spec.view === 'project' ? undefined : projectById}
-                  onToggle={(t) => update(t.id, { done: !t.done })}
-                  onSetDue={(t, d) => update(t.id, { due_date: d })}
+                  onToggle={toggleTask}
+                  onSetDue={setDue}
                   onReorder={reorder}
-                  onDelete={(t) => remove(t.id)}
-                  onToday={(t) => update(t.id, { scheduled_for: today })}
+                  onDelete={removeTask}
+                  onToday={toToday}
                 />
               ))}
             </section>
@@ -194,20 +205,22 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
         />
       )}
 
-      {menuOpen && project && (
-        <ProjectMenu
-          project={project}
-          onClose={() => setMenuOpen(false)}
-          onRename={(name) => projects.update(project.id, { name })}
-          onColor={(color) => projects.update(project.id, { color })}
-          onArchive={async () => {
-            if (await projects.update(project.id, { archived: true })) navigate('/lists')
-          }}
-          onDelete={async () => {
-            if (await projects.remove(project.id)) navigate('/lists')
-          }}
-        />
-      )}
+      <AnimatePresence>
+        {menuOpen && project && (
+          <ProjectMenu
+            project={project}
+            onClose={() => setMenuOpen(false)}
+            onRename={(name) => projects.update(project.id, { name })}
+            onColor={(color) => projects.update(project.id, { color })}
+            onArchive={async () => {
+              if (await projects.update(project.id, { archived: true })) navigate('/lists')
+            }}
+            onDelete={async () => {
+              if (await projects.remove(project.id)) navigate('/lists')
+            }}
+          />
+        )}
+      </AnimatePresence>
       {projects.actionError && (
         <button className="error-bar" onClick={projects.clearActionError}>
           {projects.actionError}

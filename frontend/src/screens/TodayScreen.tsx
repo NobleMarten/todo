@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
+import { AnimatedRow } from '../components/AnimatedRow'
 import { DoneRow } from '../components/DoneRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { TaskRow } from '../components/TaskRow'
@@ -37,6 +39,10 @@ export function TodayScreen() {
 
   const projectById = new Map(projects.map((p) => [p.id, p]))
   const projectOf = (t: Task) => (t.project_id !== null ? projectById.get(t.project_id) : undefined)
+  // одни функции на все строки (TaskRow — memo)
+  const setDue = (t: Task, d: string | null) => update(t.id, { due_date: d })
+  const removeTask = (t: Task) => remove(t.id)
+  const toToday = (t: Task) => moveToToday([t.id])
 
   if (!day) {
     return (
@@ -104,20 +110,22 @@ export function TodayScreen() {
             </button>
           </div>
           <ul className="task-list">
-            {late.map((t) => (
-              <li key={t.id}>
-                <TaskRow
-                  task={t}
-                  today={today}
-                  project={projectOf(t)}
-                  alert
-                  onToggle={() => toggle(t)}
-                  onSetDue={(d) => update(t.id, { due_date: d })}
-                  onDelete={() => remove(t.id)}
-                  onToday={() => moveToToday([t.id])}
-                />
-              </li>
-            ))}
+            <AnimatePresence initial={false}>
+              {late.map((t) => (
+                <AnimatedRow key={t.id} id={t.id}>
+                  <TaskRow
+                    task={t}
+                    today={today}
+                    project={projectOf(t)}
+                    alert
+                    onToggle={toggle}
+                    onSetDue={setDue}
+                    onDelete={removeTask}
+                    onToday={toToday}
+                  />
+                </AnimatedRow>
+              ))}
+            </AnimatePresence>
           </ul>
         </section>
       )}
@@ -140,9 +148,9 @@ export function TodayScreen() {
               draggable
               projectById={projectById}
               onToggle={toggle}
-              onSetDue={(t, d) => update(t.id, { due_date: d })}
+              onSetDue={setDue}
               onReorder={(ids) => reorderPlanned([focus.id, ...ids])}
-              onDelete={(t) => remove(t.id)}
+              onDelete={removeTask}
             />
           )}
           <Link to="/plan" className="new-project plan-more">
@@ -197,7 +205,7 @@ function FocusCard({ task, project, today, onToggle }: FocusProps) {
         >
           <span className={`check prio-${task.priority}`} />
         </button>
-        <button className="focus-main" onClick={() => openTask(task.id)}>
+        <button className="focus-main" onClick={() => openTask(task.id, task)}>
           <span className="focus-title">{task.title}</span>
           {(project || task.due_date || (stats && stats.total > 0)) && (
             <span className="task-meta">

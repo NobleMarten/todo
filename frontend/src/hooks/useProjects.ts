@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { errorText } from '../api/client'
 import {
   createProject,
@@ -8,47 +8,33 @@ import {
 } from '../api/projects'
 import type { Project, ProjectPatch } from '../api/types'
 import { todayStr } from '../lib/date'
-import { notifyChanged, subscribeChanges } from '../lib/sync'
+import { useCached } from './useCached'
 
 function byPosition(a: Project, b: Project): number {
   return a.position - b.position || a.id - b.id
 }
 
+const NO_PROJECTS: Project[] = []
+
 /**
- * Все списки вместе с архивными (архив нужен, чтобы список можно было вернуть).
+ * Все списки вместе с архивными (архив нужен, чтобы список можно было вернуть) — из общего кэша.
  * `projects` — только активные, в порядке position; мутации оптимистичные с откатом.
+ * Списки меняются редко, поэтому от изменений задач хук не перечитывается. Исключение — `withCounts`
+ * (экран «Списки» показывает у списков счётчики задач): тогда перечитывается при каждом показе и от задач.
  */
-export function useProjects() {
-  const [all, setAll] = useState<Project[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+export function useProjects({ withCounts = false }: { withCounts?: boolean } = {}) {
+  const c = useCached<Project[]>(
+    'projects',
+    async () => (await listProjects(todayStr(), true)).sort(byPosition),
+    { topics: withCounts ? ['projects', 'tasks'] : ['projects'], always: withCounts, errorText: 'не удалось загрузить списки' },
+  )
+  const { set: setAll, notify } = c
+  const all = c.data ?? NO_PROJECTS
   const [actionError, setActionError] = useState<string | null>(null)
   const allRef = useRef(all)
-  allRef.current = all
-
-  const load = useCallback(async (silent = false) => {
-    if (!silent) {
-      setLoading(true)
-      setError(null)
-    }
-    try {
-      setAll((await listProjects(todayStr(), true)).sort(byPosition))
-      setError(null)
-    } catch (e) {
-      if (!silent) setError(errorText(e, 'не удалось загрузить списки'))
-    } finally {
-      if (!silent) setLoading(false)
-    }
-  }, [])
-
-  const refresh = useCallback(() => {
-    load(true)
-  }, [load])
-
-  useEffect(() => {
-    load()
-  }, [load])
-  useEffect(() => subscribeChanges(refresh), [refresh])
+  useLayoutEffect(() => {
+    allRef.current = all
+  })
 
   const run = useCallback(
     async <T,>(optimistic: ((p: Project[]) => Project[]) | null, action: () => Promise<T>) => {
@@ -56,7 +42,8 @@ export function useProjects() {
       if (optimistic) setAll(optimistic(snapshot))
       try {
         const res = await action()
-        notifyChanged(refresh)
+        // удалённый список уносит задачи во «Входящие» — задачи тоже меняются
+        notify(['projects', 'tasks'])
         return res
       } catch (e) {
         setAll(snapshot)
@@ -64,16 +51,16 @@ export function useProjects() {
         return null
       }
     },
-    [refresh],
+    [setAll, notify],
   )
 
   const create = useCallback(
     async (name: string, color: string) => {
       const created = await run(null, () => createProject(name, color))
-      if (created) setAll((prev) => [...prev, { ...created, counts: { active: 0, overdue: 0 } }])
+      if (created) setAll((prev = []) => [...prev, { ...created, counts: { active: 0, overdue: 0 } }])
       return created
     },
-    [run],
+    [run, setAll],
   )
 
   const update = useCallback(
@@ -94,11 +81,11 @@ export function useProjects() {
     projects: all.filter((p) => !p.archived),
     archived: all.filter((p) => p.archived),
     all,
-    loading,
-    error,
+    loading: c.loading,
+    error: c.error,
     actionError,
     clearActionError: () => setActionError(null),
-    reload: load,
+    reload: c.reload,
     create,
     update,
     remove,

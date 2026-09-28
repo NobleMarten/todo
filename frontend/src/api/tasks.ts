@@ -23,6 +23,11 @@ export async function listTasks(params: ListParams): Promise<ListResponse<Task>>
   return { items: shown, total: Math.max(0, (data?.total ?? 0) - (items.length - shown.length)) }
 }
 
+/** Счётчики смарт-видов (total каждой вьюхи) одним запросом. */
+export async function taskCounts(today: DateStr): Promise<Record<'today' | 'week' | 'overdue' | 'all' | 'inbox', number>> {
+  return request('GET', '/tasks/counts', { query: { today } })
+}
+
 /** Задача вместе с подзадачами. */
 export async function getTask(id: number): Promise<Task> {
   const t = await request<Task>('GET', `/tasks/${id}`)

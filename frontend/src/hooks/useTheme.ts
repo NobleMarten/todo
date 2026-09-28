@@ -11,7 +11,7 @@ function getInitialTheme(): Theme {
   return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
 }
 
-/** Theme state persisted to localStorage, reflected on <html data-theme>. */
+/** Theme state persisted to localStorage, reflected on <html data-theme>. The inline script in index.html applies the same choice before the first paint — keep them in sync. */
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
 

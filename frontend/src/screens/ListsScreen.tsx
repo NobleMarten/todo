@@ -28,7 +28,9 @@ interface Props {
 
 /** Экран «Списки» (макет B1): смарт-виды 2×2, «мои списки», «новый список». */
 export function ListsScreen({ theme, onToggleTheme }: Props) {
-  const { projects, archived, loading, error, actionError, clearActionError, reload, create, update } = useProjects()
+  const { projects, archived, loading, error, actionError, clearActionError, reload, create, update } = useProjects({
+    withCounts: true,
+  })
   const counts = useSmartCounts()
   const [showArchived, setShowArchived] = useState(false)
 

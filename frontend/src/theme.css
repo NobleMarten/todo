@@ -1,5 +1,5 @@
 /* ── дизайн-токены: тёмная тема основная, светлая переопределяет те же имена ──── */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600&display=swap');
+@import './fonts.css';
 
 :root,
 [data-theme='dark'] {
@@ -22,7 +22,6 @@
   --warn-soft: rgba(245, 184, 81, .10);
   --shadow: 0 -12px 40px rgba(0, 0, 0, .5);
   --backdrop: rgba(0, 0, 0, .55);
-  --grain-opacity: .025;
 
   --radius-row: 14px;
   --radius-card: 16px;
@@ -53,7 +52,6 @@
   --warn-soft: rgba(201, 138, 18, .10);
   --shadow: 0 -12px 40px rgba(15, 18, 30, .12);
   --backdrop: rgba(15, 18, 30, .28);
-  --grain-opacity: .018;
 }
 
 html { color-scheme: dark; }
