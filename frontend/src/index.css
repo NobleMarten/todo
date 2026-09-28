@@ -1317,6 +1317,29 @@ ul { list-style: none; }
 .login-form .btn-big { flex: none; }
 .logout-btn { display: block; margin: 32px auto 0; }
 
+/* ── свайп «назад» от края (hooks/useEdgeBack) ──────────────────────────────── */
+/* выезжает за пальцем; когда отпускание уже вернёт назад — закрашивается акцентом */
+.edge-back {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 70;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease, background 120ms ease, color 120ms ease;
+}
+.edge-back.ready { background: var(--accent); border-color: var(--accent); color: #0B0B0F; }
+
 /* ── тост «удалено · вернуть» ─────────────────────────────────────────────── */
 /* над таб-баром / полем быстрого ввода (оба ~80 px + safe-area), под шитом карточки нет: шит закрывается при удалении */
 .toast {

@@ -1,24 +1,32 @@
-import { useEffect, useLayoutEffect } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Location } from 'react-router-dom'
 import { TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
 import { UndoToast } from './components/UndoToast'
+import { BackIcon } from './components/icons'
 import { useAuth } from './hooks/useAuth'
+import { useEdgeBack } from './hooks/useEdgeBack'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { useTheme, type Theme } from './hooks/useTheme'
-import { hidesTabBar } from './lib/nav'
+import { hidesTabBar, parentOf } from './lib/nav'
 import { bindNavigator } from './lib/opener'
-import { ArchiveScreen } from './screens/ArchiveScreen'
 import { ListsScreen } from './screens/ListsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { PlanDayScreen } from './screens/PlanDayScreen'
-import { SearchScreen } from './screens/SearchScreen'
 import { ProjectScreen } from './screens/ProjectScreen'
 import { TodayScreen } from './screens/TodayScreen'
-import { WeekScreen } from './screens/WeekScreen'
 
 const THEME_BG: Record<Theme, string> = { dark: '#0B0B0F', light: '#F6F6F8' }
+
+// Редкие экраны — отдельными кусками (−8 КБ gzip из основного бандла): «Неделя», «Итоги» с гридом активности,
+// поиск. Чтобы переход на них не ждал сети, куски догружаются в простое после первой отрисовки.
+const loadWeek = () => import('./screens/WeekScreen')
+const loadArchive = () => import('./screens/ArchiveScreen')
+const loadSearch = () => import('./screens/SearchScreen')
+const WeekScreen = lazy(() => loadWeek().then((m) => ({ default: m.WeekScreen })))
+const ArchiveScreen = lazy(() => loadArchive().then((m) => ({ default: m.ArchiveScreen })))
+const SearchScreen = lazy(() => loadSearch().then((m) => ({ default: m.SearchScreen })))
 
 /**
  * Маршруты. /task/:id — шит поверх экрана, с которого его открыли (location.state.background);
@@ -44,10 +52,32 @@ export default function App() {
   useScrollRestoration(typeof base === 'string' ? base : base.key, basePath)
   const taskId = taskMatch && /^\d+$/.test(taskMatch.params.id ?? '') ? Number(taskMatch.params.id) : null
 
+  useEffect(() => {
+    const preload = () => void Promise.all([loadWeek(), loadArchive(), loadSearch()]).catch(() => {})
+    // requestIdleCallback в Safari нет
+    const t = setTimeout(preload, 1500)
+    return () => clearTimeout(t)
+  }, [])
+
   const closeSheet = () => {
     if (background) navigate(-1)
     else navigate('/today', { replace: true })
   }
+
+  // свайп «назад» от края: закрыть карточку или уйти с экрана, у которого в шапке есть «назад»
+  const parent = parentOf(basePath)
+  const edgeIndicator = useRef<HTMLDivElement>(null)
+  useEdgeBack(
+    taskId !== null || parent !== null,
+    () => {
+      if (taskId !== null) closeSheet()
+      // есть куда вернуться внутри приложения (react-router хранит номер записи в history.state.idx) — назад,
+      // иначе (открыли по ссылке) — туда же, куда ведёт стрелка в шапке
+      else if (((window.history.state as { idx?: number } | null)?.idx ?? 0) > 0) navigate(-1)
+      else if (parent) navigate(parent, { replace: true })
+    },
+    edgeIndicator,
+  )
 
   // пока не знаем, нужен ли вход, — пустой фон, а не мигание экрана входа
   if (auth.state !== 'in') {
@@ -61,21 +91,27 @@ export default function App() {
   return (
     <div className="app">
       <main className="container">
-        <Routes location={base}>
-          <Route path="/" element={<Navigate to="/today" replace />} />
-          <Route path="/today" element={<TodayScreen />} />
-          <Route path="/plan" element={<PlanDayScreen />} />
-          <Route path="/week" element={<WeekScreen />} />
-          <Route path="/search" element={<SearchScreen />} />
-          <Route path="/lists" element={<ListsScreen theme={theme} onToggleTheme={toggle} />} />
-          <Route path="/lists/:id" element={<ProjectScreen />} />
-          <Route path="/archive" element={<ArchiveScreen onLogout={auth.enabled ? auth.logout : undefined} />} />
-          <Route path="*" element={<Navigate to="/today" replace />} />
-        </Routes>
+        {/* кусок экрана ещё не пришёл (прямая ссылка, медленная сеть) — пусто, а не скелетон на миг */}
+        <Suspense fallback={null}>
+          <Routes location={base}>
+            <Route path="/" element={<Navigate to="/today" replace />} />
+            <Route path="/today" element={<TodayScreen />} />
+            <Route path="/plan" element={<PlanDayScreen />} />
+            <Route path="/week" element={<WeekScreen />} />
+            <Route path="/search" element={<SearchScreen />} />
+            <Route path="/lists" element={<ListsScreen theme={theme} onToggleTheme={toggle} />} />
+            <Route path="/lists/:id" element={<ProjectScreen />} />
+            <Route path="/archive" element={<ArchiveScreen onLogout={auth.enabled ? auth.logout : undefined} />} />
+            <Route path="*" element={<Navigate to="/today" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       {!hidesTabBar(basePath) && <TabBar pathname={basePath} />}
       <AnimatePresence>{taskId !== null && <TaskSheet key={taskId} id={taskId} onClose={closeSheet} />}</AnimatePresence>
       <UndoToast />
+      <div className="edge-back" ref={edgeIndicator} aria-hidden="true">
+        <BackIcon />
+      </div>
     </div>
   )
 }
