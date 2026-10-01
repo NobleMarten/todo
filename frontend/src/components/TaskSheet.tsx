@@ -50,6 +50,7 @@ export function TaskSheet({ id, onClose }: Props) {
           remove={async () => {
             if (await remove()) onClose()
           }}
+          onClose={onClose}
         />
       )}
       {actionError && (
@@ -63,10 +64,11 @@ export function TaskSheet({ id, onClose }: Props) {
 
 type Actions = Pick<ReturnType<typeof useTask>, 'update' | 'addSubtask' | 'updateSubtask'> & {
   remove: () => void
+  onClose: () => void
 }
 
 /** Карточка (макет C2): заголовок с чекбоксом, список и приоритет, две даты, подзадачи, заметка. */
-function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: Task } & Actions) {
+function TaskCard({ task, update, addSubtask, updateSubtask, remove, onClose }: { task: Task } & Actions) {
   const openTask = useOpenTask()
   const { projects } = useProjects()
   const [pickingProject, setPickingProject] = useState(false)
@@ -211,11 +213,16 @@ function TaskCard({ task, update, addSubtask, updateSubtask, remove }: { task: T
           </>
         ) : (
           <>
+            {/* «ок» только закрывает: выполнить — чекбокс у заголовка, чтобы не отметить задачу случайно.
+                blur — заголовок и заметка сохраняются по нему, а тап по кнопке на iOS фокус не уводит */}
             <button
-              className={`btn btn-big ${task.done ? '' : 'btn-primary'}`}
-              onClick={() => update({ done: !task.done })}
+              className="btn btn-big btn-primary"
+              onClick={() => {
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+                onClose()
+              }}
             >
-              {task.done ? 'вернуть в работу' : 'выполнено'}
+              ок
             </button>
             <button className="btn btn-big btn-square" onClick={() => setConfirmDelete(true)} aria-label="удалить задачу">
               <TrashIcon />
