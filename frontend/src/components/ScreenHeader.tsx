@@ -34,13 +34,14 @@ export function ScreenHeader({ title, aside, back, right, children }: Props) {
   )
 }
 
-/** Логотип [todo] — характер приложения (раздел 5), в макетах его нет. */
+/** Логотип: светящаяся сфера — та же, что на иконке приложения (pic3.png), — и слово «todo». */
 export function Logo() {
   return (
-    <span className="logo">
-      <span className="logo-bracket">[</span>
-      <span className="logo-text">todo</span>
-      <span className="logo-bracket">]</span>
+    <span className="logo" aria-label="todo">
+      <span className="logo-orb" aria-hidden="true" />
+      <span className="logo-text" aria-hidden="true">
+        todo
+      </span>
     </span>
   )
 }
