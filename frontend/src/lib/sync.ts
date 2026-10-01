@@ -20,3 +20,19 @@ export function notifyChanged(source?: Listener, topics: Topic[] = ['tasks']): v
     if (fn !== source && want.some((t) => topics.includes(t))) fn(topics)
   }
 }
+
+// «Обновить всё» (свайп вниз): каждый смонтированный экран регистрирует перечитывание своих данных,
+// refreshAll ждёт их все — индикатор крутится ровно до конца запросов.
+const refreshers = new Set<() => Promise<void>>()
+
+export function onRefresh(fn: () => Promise<void>): () => void {
+  refreshers.add(fn)
+  return () => {
+    refreshers.delete(fn)
+  }
+}
+
+/** Перечитать всё, что сейчас на экране; ошибки отдельных запросов не прерывают остальные. */
+export async function refreshAll(): Promise<void> {
+  await Promise.allSettled([...refreshers].map((fn) => fn()))
+}

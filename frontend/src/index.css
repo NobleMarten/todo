@@ -1359,6 +1359,34 @@ ul { list-style: none; }
 }
 .edge-back.ready { background: var(--accent); border-color: var(--accent); color: #0B0B0F; }
 
+/* ── потянуть вниз — обновить (hooks/usePullRefresh) ──────────────────────────── */
+/* прячется над верхним краем и опускается за пальцем; за порогом — акцентом, после отпускания — крутится */
+.pull-refresh {
+  position: fixed;
+  left: 50%;
+  top: calc(env(safe-area-inset-top) - 40px);
+  z-index: 60;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--muted);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+  opacity: 0;
+  transform: translate(-50%, 0);
+  pointer-events: none;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+.pull-refresh svg { transform: rotate(var(--turn, 0deg)); }
+.pull-refresh.settle { transition: transform 260ms cubic-bezier(.2, .7, .2, 1), opacity 200ms ease; }
+.pull-refresh.ready { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.pull-refresh.busy { color: var(--accent); }
+.pull-refresh.busy svg { animation: spin 700ms linear infinite; }
+
 /* ── тост «удалено · вернуть» ─────────────────────────────────────────────── */
 /* над таб-баром / полем быстрого ввода (оба ~80 px + safe-area), под шитом карточки нет: шит закрывается при удалении */
 .toast {

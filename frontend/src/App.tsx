@@ -4,13 +4,16 @@ import { Navigate, Route, Routes, useLocation, useMatch, useNavigate, type Locat
 import { TabBar } from './components/TabBar'
 import { TaskSheet } from './components/TaskSheet'
 import { UndoToast } from './components/UndoToast'
-import { BackIcon } from './components/icons'
+import { BackIcon, RefreshIcon } from './components/icons'
 import { useAuth } from './hooks/useAuth'
 import { useEdgeBack } from './hooks/useEdgeBack'
+import { usePullRefresh } from './hooks/usePullRefresh'
 import { useScrollRestoration } from './hooks/useScrollRestoration'
 import { useTheme, type Theme } from './hooks/useTheme'
 import { hidesTabBar, parentOf } from './lib/nav'
+import { cache } from './lib/cache'
 import { bindNavigator } from './lib/opener'
+import { refreshAll } from './lib/sync'
 import { ListsScreen } from './screens/ListsScreen'
 import { LoginScreen } from './screens/LoginScreen'
 import { PlanDayScreen } from './screens/PlanDayScreen'
@@ -79,6 +82,18 @@ export default function App() {
     edgeIndicator,
   )
 
+  // потянуть вниз — обновить: всё в кэше устаревает (скрытые экраны перечитаются при показе),
+  // показанное сейчас перечитывается сразу, индикатор ждёт эти запросы
+  const pullIndicator = useRef<HTMLDivElement>(null)
+  usePullRefresh(
+    auth.state === 'in' && taskId === null,
+    async () => {
+      cache.invalidate(() => true)
+      await refreshAll()
+    },
+    pullIndicator,
+  )
+
   // пока не знаем, нужен ли вход, — пустой фон, а не мигание экрана входа
   if (auth.state !== 'in') {
     return (
@@ -111,6 +126,9 @@ export default function App() {
       <UndoToast />
       <div className="edge-back" ref={edgeIndicator} aria-hidden="true">
         <BackIcon />
+      </div>
+      <div className="pull-refresh" ref={pullIndicator} aria-hidden="true">
+        <RefreshIcon />
       </div>
     </div>
   )

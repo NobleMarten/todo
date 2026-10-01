@@ -225,3 +225,13 @@ export function SearchIcon() {
     </svg>
   )
 }
+
+/** Стрелка по кругу — индикатор «потянуть, чтобы обновить». */
+export function RefreshIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+      <path d="M14.5 9a5.5 5.5 0 1 1-1.6-3.9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M13.4 2.6v3h-3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}

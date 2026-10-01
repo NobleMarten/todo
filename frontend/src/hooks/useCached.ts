@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { errorText } from '../api/client'
 import { cache, staleKeys, type Updater } from '../lib/cache'
-import { notifyChanged, subscribeChanges, type Topic } from '../lib/sync'
+import { notifyChanged, onRefresh, subscribeChanges, type Topic } from '../lib/sync'
 
 // любая мутация помечает устаревшим всё, что от неё зависит, — в том числе экраны, которых сейчас нет:
 // при следующем показе они нарисуют старое и тихо перечитаются
@@ -74,6 +74,9 @@ export function useCached<T>(key: string | null, fetcher: () => Promise<T>, opts
       unsubscribe()
     }
   }, [revalidate, topicsKey])
+
+  // свайп вниз: перечитать сейчас, даже свежее (refreshAll ждёт этот запрос)
+  useEffect(() => (key ? onRefresh(revalidate) : undefined), [key, revalidate])
 
   // вернулись в приложение (PWA из фона) — устаревшее перечитать
   useEffect(() => {
