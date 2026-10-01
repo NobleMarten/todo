@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Task } from '../api/types'
 import { Activity } from '../components/Activity'
 import { DoneRow } from '../components/DoneRow'
+import { EmptyState } from '../components/EmptyState'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { ErrorState } from '../components/ErrorState'
 import { SkeletonRows } from '../components/Skeleton'
@@ -74,10 +75,11 @@ export function ArchiveScreen({ user, onLogout }: { user: string | null; onLogou
         <ErrorState message={archive.error} onRetry={() => archive.reload()} />
       ) : (
         archive.items.length === 0 && (
-          <div className="empty">
-            <span className="empty-title">выполненных задач пока нет</span>
-            <span className="empty-hint">отметь задачу — она появится здесь, а в гриде загорится квадратик</span>
-          </div>
+          <EmptyState
+            art="done"
+            title="выполненных задач пока нет"
+            hint="отметь задачу — она появится здесь, а в гриде загорится квадратик"
+          />
         )
       )}
 

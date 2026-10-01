@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { DayCounts } from '../hooks/useActivity'
 import { useElementWidth } from '../hooks/useElementWidth'
 import { dateKey, pluralTasks } from '../lib/format'
+import { EmptyState } from './EmptyState'
 import { SkeletonBlock } from './Skeleton'
 
 interface Props {
@@ -142,11 +143,7 @@ export function Activity({ counts, loading, error, onReload }: Props) {
           {error} · повторить
         </button>
       ) : stats.total === 0 ? (
-        <div className="empty">
-          <span className="empty-icon">◫</span>
-          <span className="empty-title">пока нет активности</span>
-          <span className="empty-hint">выполни первую задачу — здесь появится квадратик</span>
-        </div>
+        <EmptyState art="calendar" compact title="пока нет активности" hint="выполни первую задачу — здесь появится квадратик" />
       ) : (
         <>
           <div className="cal-stats">

@@ -3,6 +3,7 @@ import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import type { DateStr, Project, Task, Week } from '../api/types'
 import { AnimatedRow } from '../components/AnimatedRow'
+import { EmptyState } from '../components/EmptyState'
 import { DayDrag } from '../components/DayDrag'
 import { DoneRow } from '../components/DoneRow'
 import { ErrorState } from '../components/ErrorState'
@@ -190,9 +191,7 @@ export function WeekScreen() {
             </ul>
           )}
           {dayData && dayData.scheduled.length + dayData.deadlines.length + dayData.done.length === 0 && (
-            <div className="empty week-empty">
-              <span className="empty-hint">на этот день ничего — перетащи задачу из бэклога или добавь ниже</span>
-            </div>
+            <EmptyState art="calendar" compact hint="на этот день ничего — перетащи задачу из бэклога или добавь ниже" />
           )}
 
           <QuickAdd

@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useSearchParams } from 'react-router-dom'
 import type { Task } from '../api/types'
 import { AnimatedRow } from '../components/AnimatedRow'
+import { EmptyState } from '../components/EmptyState'
 import { DoneRow } from '../components/DoneRow'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { SkeletonRows } from '../components/Skeleton'
@@ -59,16 +60,11 @@ export function SearchScreen() {
       {error && <div className="error-bar">{error}</div>}
 
       {!q ? (
-        <div className="empty">
-          <span className="empty-hint">ищет по заголовкам и заметкам — и в активных, и в выполненных</span>
-        </div>
+        <EmptyState art="search" hint="ищет по заголовкам и заметкам — и в активных, и в выполненных" />
       ) : loading && !result ? (
         <SkeletonRows count={3} />
       ) : empty ? (
-        <div className="empty">
-          <span className="empty-title">ничего не нашлось</span>
-          <span className="empty-hint">по «{q}» нет ни заголовков, ни заметок</span>
-        </div>
+        <EmptyState art="search" title="ничего не нашлось" hint={`по «${q}» нет ни заголовков, ни заметок`} />
       ) : (
         result && (
           <>

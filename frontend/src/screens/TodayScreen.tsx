@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
 import { AnimatedRow } from '../components/AnimatedRow'
 import { DoneRow } from '../components/DoneRow'
+import { EmptyState } from '../components/EmptyState'
 import { ProgressRing } from '../components/ProgressRing'
 import { Logo } from '../components/ScreenHeader'
 import { TaskRow } from '../components/TaskRow'
@@ -127,13 +128,15 @@ export function TodayScreen() {
       )}
 
       {!focus ? (
-        <div className="empty today-empty">
-          <span className="empty-title">на сегодня ничего не запланировано</span>
-          <span className="empty-hint">возьми пару задач из списков — просроченное и дедлайны недели подскажут</span>
+        <EmptyState
+          art="sun"
+          title="день пока свободен"
+          hint="возьми пару задач из списков — просроченное и дедлайны недели подскажут"
+        >
           <Link to="/plan" className="btn btn-primary">
             собрать день
           </Link>
-        </div>
+        </EmptyState>
       ) : (
         <section className="task-section">
           <div className="section-label">план на день · {plan.length}</div>

@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
+import { EmptyState } from '../components/EmptyState'
 import { ColorSwatches } from '../components/ProjectPicker'
 import { QuickAdd } from '../components/QuickAdd'
 import { ScreenHeader } from '../components/ScreenHeader'
@@ -157,10 +158,7 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
       ) : error ? (
         <ErrorState message={error} onRetry={() => reload()} />
       ) : tasks.length === 0 ? (
-        <div className="empty">
-          <span className="empty-title">{emptyText ?? 'в списке пусто'}</span>
-          {canAdd && <span className="empty-hint">{QUICK_ADD_HINT}</span>}
-        </div>
+        <EmptyState art="list" title={emptyText ?? 'в списке пусто'} hint={canAdd ? QUICK_ADD_HINT : undefined} />
       ) : (
         sectionsFor(grouping).map(({ key, label }) => {
           const list = groups.get(key) ?? []

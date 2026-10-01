@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { errorText } from '../api/client'
 import type { Project, Task } from '../api/types'
+import { EmptyState } from '../components/EmptyState'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { ErrorState } from '../components/ErrorState'
 import { SkeletonRows } from '../components/Skeleton'
@@ -66,10 +67,11 @@ export function PlanDayScreen() {
       ) : error && !s ? (
         <ErrorState message={error} onRetry={() => reload()} />
       ) : empty ? (
-        <div className="empty">
-          <span className="empty-title">предложить нечего</span>
-          <span className="empty-hint">просроченного нет, дедлайнов на неделе нет, всё без дат трогали недавно</span>
-        </div>
+        <EmptyState
+          art="idea"
+          title="предложить нечего"
+          hint="просроченного нет, дедлайнов на неделе нет, всё без дат трогали недавно"
+        />
       ) : (
         s && (
           <>

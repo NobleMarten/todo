@@ -19,6 +19,7 @@ import {
   type Period,
 } from '../lib/stats'
 import { SkeletonBlock } from './Skeleton'
+import { EmptyState } from './EmptyState'
 import { HourStrip, ListBars, PrioBar, Ring, TrendChart, WeekdayColumns, type ListBar } from './StatsCharts'
 
 interface Props {
@@ -69,10 +70,8 @@ export function StatsPanel({ period, onPeriod, data, loading, error, onReload, p
           {error ?? 'не удалось загрузить статистику'} · повторить
         </button>
       ) : data.totals.done === 0 && data.totals.created === 0 && data.backlog.active === 0 ? (
-        <div className="stats-card empty">
-          <span className="empty-icon">◫</span>
-          <span className="empty-title">за этот период пусто</span>
-          <span className="empty-hint">создай или выполни задачу — здесь появятся графики</span>
+        <div className="stats-card">
+          <EmptyState art="chart" title="за этот период пусто" hint="создай или выполни задачу — здесь появятся графики" />
         </div>
       ) : (
         // key: при смене периода карточки заново «въезжают»
