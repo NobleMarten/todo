@@ -1931,3 +1931,40 @@ ul { list-style: none; }
 
 /* перетаскиваемая строка приподнимается над карточкой */
 .reorder-item { border-radius: var(--radius-row); }
+
+/* ── отметка «выполнено»: заливка с пружинкой, галочка прорисовывается, вспышка кольца (hooks/useCompleting) ── */
+.check { position: relative; }
+.check.pop { animation: check-pop 380ms cubic-bezier(.3, 1.6, .5, 1); }
+.check.pop svg path { stroke-dasharray: 12; stroke-dashoffset: 12; animation: check-draw 240ms 90ms ease-out forwards; }
+.check.pop::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--ok);
+  animation: check-ring 460ms ease-out forwards;
+  pointer-events: none;
+}
+@keyframes check-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(.82); }
+  100% { transform: scale(1); }
+}
+@keyframes check-draw { to { stroke-dashoffset: 0; } }
+@keyframes check-ring {
+  from { opacity: .8; transform: scale(.9); }
+  to { opacity: 0; transform: scale(1.7); }
+}
+/* строка, пока отметка доигрывает: заголовок гаснет и зачёркивается, фон чуть зеленеет */
+.task.completing .task-title,
+.focus-card.completing .focus-title {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--faint);
+  transition: color 200ms ease;
+}
+.task-list .task.completing { background: color-mix(in srgb, var(--ok) 6%, var(--surface)); transition: background 200ms ease; }
+@media (prefers-reduced-motion: reduce) {
+  .check.pop, .check.pop svg path, .check.pop::after { animation: none; stroke-dashoffset: 0; }
+  .check.pop::after { display: none; }
+}

@@ -7,10 +7,11 @@ import { DoneRow } from '../components/DoneRow'
 import { Logo, ScreenHeader } from '../components/ScreenHeader'
 import { TaskRow } from '../components/TaskRow'
 import { TaskRun } from '../components/TaskRun'
+import { useCompleting } from '../hooks/useCompleting'
 import { useOpenTask } from '../hooks/useOpenTask'
 import { ErrorState } from '../components/ErrorState'
 import { SkeletonBlock, SkeletonRows } from '../components/Skeleton'
-import { AlertIcon, ChevronIcon, PlusIcon } from '../components/icons'
+import { AlertIcon, CheckIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useDay } from '../hooks/useDay'
 import { useProjects } from '../hooks/useProjects'
 import { dayHeading, shortDate } from '../lib/date'
@@ -190,20 +191,24 @@ interface FocusProps {
 /** «Фокус дня» — первая задача плана, крупно и в рамке акцента. */
 function FocusCard({ task, project, today, onToggle }: FocusProps) {
   const openTask = useOpenTask()
+  const check = useCompleting(false, onToggle)
   const stats = task.subtask_stats
   const overdue = task.due_date !== null && task.due_date < today
 
   return (
-    <section className="focus-card" aria-label="фокус дня">
+    <section className={`focus-card ${check.completing ? 'completing' : ''}`} aria-label="фокус дня">
       <span className="focus-label">фокус дня</span>
       <div className="focus-row">
         <button
           className="check-hit"
-          onClick={onToggle}
+          onClick={check.onClick}
           aria-label={`выполнить: ${task.title}`}
+          aria-pressed={check.checked}
           title={PRIORITY_LABEL[task.priority]}
         >
-          <span className={`check prio-${task.priority}`} />
+          <span className={`check prio-${task.priority} ${check.checked ? 'checked pop' : ''}`}>
+            {check.checked && <CheckIcon />}
+          </span>
         </button>
         <button className="focus-main" onClick={() => openTask(task.id, task)}>
           <span className="focus-title">{task.title}</span>

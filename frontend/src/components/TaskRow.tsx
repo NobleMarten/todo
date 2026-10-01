@@ -7,6 +7,7 @@ import { PRIORITY_LABEL } from '../lib/format'
 import { NativeDateInput } from './DatePicker'
 import { SubtaskAdder, SubtaskList } from './SubtaskRow'
 import { SwipeRow } from './SwipeRow'
+import { useCompleting } from '../hooks/useCompleting'
 import { useOpenTask } from '../hooks/useOpenTask'
 import { CalendarIcon, CheckIcon, GripIcon, RepeatIcon, SpinIcon } from './icons'
 import { ruleLabel } from '../lib/repeat'
@@ -44,6 +45,7 @@ export const TaskRow = memo(function TaskRow({
 }: Props) {
   const [expanded, setExpanded] = useState(false)
   const openTask = useOpenTask()
+  const check = useCompleting(task.done, () => onToggle(task))
   const stats = task.subtask_stats
   const overdue = task.due_date !== null && task.due_date < today
   const red = (overdue || alert) && !task.done
@@ -72,17 +74,17 @@ export const TaskRow = memo(function TaskRow({
   }
 
   const row = (
-    <div className={`task ${task.done ? 'done' : ''} ${red ? 'overdue' : ''}`}>
+    <div className={`task ${task.done ? 'done' : ''} ${red ? 'overdue' : ''} ${check.completing ? 'completing' : ''}`}>
       <div className="task-row">
         <button
           className="check-hit"
-          onClick={() => onToggle(task)}
+          onClick={check.onClick}
           aria-label={`${task.done ? 'вернуть' : 'выполнить'}: ${task.title}`}
-          aria-pressed={task.done}
+          aria-pressed={check.checked}
           title={PRIORITY_LABEL[task.priority]}
         >
-          <span className={`check prio-${task.priority} ${task.done ? 'checked' : ''}`}>
-            {task.done && <CheckIcon />}
+          <span className={`check prio-${task.priority} ${check.checked ? 'checked' : ''} ${check.completing ? 'pop' : ''}`}>
+            {check.checked && <CheckIcon />}
           </span>
         </button>
 
