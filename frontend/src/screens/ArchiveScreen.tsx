@@ -86,15 +86,17 @@ export function ArchiveScreen({ user, onLogout }: { user: string | null; onLogou
           <div className="section-label">
             {dayLabel(day, today)} · {tasks.length}
           </div>
-          {tasks.map((t) => (
-            <DoneRow
-              key={t.id}
-              task={t}
-              project={t.project_id !== null ? projectById.get(t.project_id) : undefined}
-              aside={timeOf(t.done_at)}
-              onUndo={() => archive.undo(t.id)}
-            />
-          ))}
+          <div className="group">
+            {tasks.map((t) => (
+              <DoneRow
+                key={t.id}
+                task={t}
+                project={t.project_id !== null ? projectById.get(t.project_id) : undefined}
+                aside={timeOf(t.done_at)}
+                onUndo={() => archive.undo(t.id)}
+              />
+            ))}
+          </div>
         </section>
       ))}
 

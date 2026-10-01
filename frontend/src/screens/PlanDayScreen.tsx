@@ -76,17 +76,21 @@ export function PlanDayScreen() {
             {s.overdue.length > 0 && (
               <section className="task-section">
                 <div className="section-label tone-overdue">просрочено · {s.overdue.length}</div>
-                {s.overdue.map((t) => (
-                  <PlanRow key={t.id} {...rowProps(t)} aside={shortDate(t.due_date!)} danger />
-                ))}
+                <div className="group">
+                  {s.overdue.map((t) => (
+                    <PlanRow key={t.id} {...rowProps(t)} aside={shortDate(t.due_date!)} danger />
+                  ))}
+                </div>
               </section>
             )}
             {s.due_soon.length > 0 && (
               <section className="task-section">
                 <div className="section-label">дедлайн на этой неделе · {s.due_soon.length}</div>
-                {s.due_soon.map((t) => (
-                  <PlanRow key={t.id} {...rowProps(t)} aside={shortDate(t.due_date!)} />
-                ))}
+                <div className="group">
+                  {s.due_soon.map((t) => (
+                    <PlanRow key={t.id} {...rowProps(t)} aside={shortDate(t.due_date!)} />
+                  ))}
+                </div>
               </section>
             )}
             {s.stale.length > 0 && (
@@ -95,9 +99,11 @@ export function PlanDayScreen() {
                   <span>из списков</span>
                   <span className="plan-stale-note">давно не трогал</span>
                 </div>
-                {s.stale.map((t) => (
-                  <PlanRow key={t.id} {...rowProps(t)} aside={idleLabel(t, date)} />
-                ))}
+                <div className="group">
+                  {s.stale.map((t) => (
+                    <PlanRow key={t.id} {...rowProps(t)} aside={idleLabel(t, date)} />
+                  ))}
+                </div>
               </section>
             )}
           </>

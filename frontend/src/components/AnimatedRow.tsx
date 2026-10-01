@@ -6,7 +6,7 @@ import { motion, Reorder, useIsPresent, type DragControls } from 'framer-motion'
 // Высота анимируется только у уходящей строки; появление и сдвиг — transform/opacity.
 // Родитель оборачивает строки в <AnimatePresence initial={false}>: при первом показе экрана анимаций нет.
 
-const GAP = 8 // gap у .task-list: уходящая строка забирает и его, иначе в конце соседи дёрнутся на 8 px
+const GAP = 0 // gap у .task-list (строки сгруппированы в карточку, зазора нет): уходящая строка забирает и его
 const ENTER = { opacity: 0, y: 6 }
 const SHOWN = { opacity: 1, y: 0 }
 const EXIT = { opacity: 0, height: 0, marginBottom: -GAP, transition: { duration: 0.2, ease: 'easeOut' } } as const
@@ -52,6 +52,8 @@ export function AnimatedReorderRow({
       dragControls={controls}
       onDragEnd={onDragEnd}
       className="reorder-item"
+      // поднятая строка — с тенью над карточкой списка
+      whileDrag={{ scale: 1.02, boxShadow: '0 14px 34px rgba(0, 0, 0, 0.35)', zIndex: 5 }}
       initial={ENTER}
       animate={SHOWN}
       exit={EXIT}

@@ -1858,3 +1858,76 @@ ul { list-style: none; }
 @media (prefers-reduced-motion: reduce) {
   .stats > .stats-card, .stats > .tiles, .chart-plot, .chart-glow, .chart-tip { animation: none; }
 }
+
+/* ── сгруппированные строки: одна карточка, внутри — тонкие разделители (как в списках iOS) ──── */
+/* .task-list и .rows — списки задач и списков; .group — обёртка для остальных строк (выполненные, «Собрать день») */
+.task-list, .rows, .group, .skeleton-rows {
+  --group-r: calc(var(--radius-card) - 1px);
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.group { display: flex; flex-direction: column; }
+.task-list:empty, .group:empty { display: none; }
+
+/* строки без своих рамок; фон непрозрачный — под строкой при свайпе лежат «удалить» и «на сегодня» */
+.task-list .task,
+.rows .project-row,
+.group .plan-row,
+.group .done-row,
+.skeleton-rows .skeleton-row {
+  position: relative;
+  border: 0;
+  border-radius: 0;
+  background: var(--surface);
+}
+.task-list .swipe,
+.task-list .swipe-under { border-radius: 0; }
+.group .done-row { padding-left: 2px; }
+
+/* разделитель начинается от текста, а не от края карточки */
+.task-list > li + li .task::before,
+.rows > * + *::before,
+.group > * + *::before,
+.skeleton-rows > * + *::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 46px;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+  z-index: 1;
+}
+.rows > * + *::before { left: 38px; }
+.group > .plan-row + .plan-row::before { left: 14px; }
+.rows > *, .group > *, .skeleton-rows > * { position: relative; }
+
+/* скругления у первой и последней строки — по карточке */
+.task-list > li:first-child :is(.swipe, .swipe-under, .task),
+.rows > :first-child,
+.group > :first-child,
+.skeleton-rows > :first-child { border-top-left-radius: var(--group-r); border-top-right-radius: var(--group-r); }
+.task-list > li:last-child :is(.swipe, .swipe-under, .task),
+.rows > :last-child,
+.group > :last-child,
+.skeleton-rows > :last-child { border-bottom-left-radius: var(--group-r); border-bottom-right-radius: var(--group-r); }
+
+/* просроченная строка — подкрашенный фон вместо красной рамки */
+.task-list .task.overdue { background: color-mix(in srgb, var(--danger) 7%, var(--surface)); }
+/* выбранная в «Собрать день» — фон акцентом */
+.group .plan-row.picked { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+.just-added .task { animation: row-flash-grouped 1.2s ease-out; }
+@keyframes row-flash-grouped {
+  0%, 30% { background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+  100% { background: var(--surface); }
+}
+
+/* «новый список» — последняя строка группы, без пунктира */
+.rows .new-project { margin: 0; border: 0; border-radius: 0; }
+.rows .new-project:not(.open) { color: var(--accent); }
+
+/* перетаскиваемая строка приподнимается над карточкой */
+.reorder-item { border-radius: var(--radius-row); }

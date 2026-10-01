@@ -39,14 +39,16 @@ export function DoneSection({ scope }: { scope: ArchiveScope }) {
       </button>
       {open && (
         <>
-          {archive.items.map((t) => (
-            <DoneRow
-              key={t.id}
-              task={t}
-              aside={t.done_at ? shortDate(toDateStr(new Date(t.done_at))) : undefined}
-              onUndo={() => archive.undo(t.id)}
-            />
-          ))}
+          <div className="group">
+            {archive.items.map((t) => (
+              <DoneRow
+                key={t.id}
+                task={t}
+                aside={t.done_at ? shortDate(toDateStr(new Date(t.done_at))) : undefined}
+                onUndo={() => archive.undo(t.id)}
+              />
+            ))}
+          </div>
           {archive.items.length < archive.total && (
             <button className="btn btn-ghost archive-more" disabled={archive.loadingMore} onClick={archive.loadMore}>
               {archive.loadingMore ? <SpinIcon /> : `показать ещё · ${archive.total - archive.items.length}`}
