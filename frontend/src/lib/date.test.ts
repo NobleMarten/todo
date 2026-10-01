@@ -6,6 +6,7 @@ import {
   daysBetween,
   fieldDateLabel,
   fromDateStr,
+  greeting,
   longDayLabel,
   mondayOf,
   relativeLabel,
@@ -103,5 +104,21 @@ describe('неделя', () => {
     expect(weekTitle('2026-09-21', '2026-09-27', '2026-09-25')).toBe('Сентябрь')
     expect(weekTitle('2026-09-28', '2026-10-04', '2026-09-25')).toBe('Сентябрь – октябрь')
     expect(weekTitle('2026-12-28', '2027-01-03', '2026-09-25')).toBe('Декабрь – январь 2027')
+  })
+})
+
+describe('greeting', () => {
+  it('follows the time of day', () => {
+    expect([4, 5, 11, 12, 17, 18, 22, 23, 0].map(greeting)).toEqual([
+      'Доброй ночи',
+      'Доброе утро',
+      'Доброе утро',
+      'Добрый день',
+      'Добрый день',
+      'Добрый вечер',
+      'Добрый вечер',
+      'Доброй ночи',
+      'Доброй ночи',
+    ])
   })
 })

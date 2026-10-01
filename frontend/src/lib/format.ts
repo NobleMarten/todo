@@ -98,3 +98,12 @@ export function groupTasks(tasks: Task[], grouping: Grouping, today: DateStr): M
 // Лимиты бэкенда (service.maxTitleLen и имя списка) — чтобы не ловить 400 на вводе.
 export const TITLE_MAX = 120
 export const PROJECT_NAME_MAX = 60
+
+/** Строка под приветствием на «Сегодня»: сколько осталось и сколько просрочено. */
+export function daySummary(done: number, total: number, late: number): string {
+  const lateText = late > 0 ? ` · ${late} ${plural(late, ['просрочена', 'просрочены', 'просрочено'])}` : ''
+  if (total === 0) return late > 0 ? `план пуст${lateText}` : 'план на сегодня пока пуст'
+  const left = total - done
+  if (left === 0) return `всё сделано — ${pluralTasks(total)}${lateText}`
+  return `${plural(left, ['осталась', 'осталось', 'осталось'])} ${pluralTasks(left)} из ${total}${lateText}`
+}

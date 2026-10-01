@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom'
 import type { Project, Task } from '../api/types'
 import { AnimatedRow } from '../components/AnimatedRow'
 import { DoneRow } from '../components/DoneRow'
-import { Logo, ScreenHeader } from '../components/ScreenHeader'
+import { ProgressRing } from '../components/ProgressRing'
+import { Logo } from '../components/ScreenHeader'
 import { TaskRow } from '../components/TaskRow'
 import { TaskRun } from '../components/TaskRun'
 import { useCompleting } from '../hooks/useCompleting'
@@ -14,8 +15,8 @@ import { SkeletonBlock, SkeletonRows } from '../components/Skeleton'
 import { AlertIcon, CheckIcon, ChevronIcon, PlusIcon } from '../components/icons'
 import { useDay } from '../hooks/useDay'
 import { useProjects } from '../hooks/useProjects'
-import { dayHeading, shortDate } from '../lib/date'
-import { PRIORITY_LABEL } from '../lib/format'
+import { dayHeading, greeting, shortDate } from '../lib/date'
+import { PRIORITY_LABEL, daySummary } from '../lib/format'
 
 /**
  * Экран «Сегодня» (макет A1): прогресс дня, фокус — первая задача плана, красный блок
@@ -51,7 +52,7 @@ export function TodayScreen() {
         <div className="eyebrow">
           <Logo />
         </div>
-        <ScreenHeader title="Сегодня" />
+        <DayHeader done={0} total={0} late={0} pending />
         {error ? (
           <ErrorState message={error} onRetry={() => reload()} />
         ) : (
@@ -78,13 +79,7 @@ export function TodayScreen() {
         <span className="today-date">{dayHeading(today)}</span>
         <Logo />
       </div>
-      <ScreenHeader title="Сегодня" aside={total > 0 ? `${doneCount} / ${total}` : undefined}>
-        {total > 0 && (
-          <span className="progress-track day-progress">
-            <span className="progress-fill" style={{ width: `${(doneCount / total) * 100}%` }} />
-          </span>
-        )}
-      </ScreenHeader>
+      <DayHeader done={doneCount} total={total} late={late.length} />
 
       {error && (
         <button className="error-bar" onClick={() => reload()}>
@@ -178,6 +173,27 @@ export function TodayScreen() {
         </section>
       )}
     </div>
+  )
+}
+
+/**
+ * Шапка «Сегодня»: приветствие по времени суток, под ним — сколько осталось и что просрочено,
+ * справа — кольцо прогресса дня. pending — данные ещё грузятся: только приветствие.
+ */
+function DayHeader({ done, total, late, pending }: { done: number; total: number; late: number; pending?: boolean }) {
+  const all = total > 0 && done === total
+  return (
+    <header className="screen-header today-header">
+      <div className="today-heading">
+        <h1 className="screen-title today-title">{greeting(new Date().getHours())}</h1>
+        {!pending && <p className={`today-summary ${all ? 'all-done' : ''}`}>{daySummary(done, total, late)}</p>}
+      </div>
+      {total > 0 && (
+        <ProgressRing value={done / total} done={all} label={`выполнено ${done} из ${total}`}>
+          {all ? <CheckIcon /> : <span className="today-ring-num">{done}/{total}</span>}
+        </ProgressRing>
+      )}
+    </header>
   )
 }
 

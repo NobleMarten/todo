@@ -102,3 +102,11 @@ export function timeOf(iso: string | null): string {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 }
+
+/** Приветствие по часу: 5–11 утро, 12–17 день, 18–22 вечер, остальное — ночь. */
+export function greeting(hour: number): string {
+  if (hour >= 5 && hour < 12) return 'Доброе утро'
+  if (hour >= 12 && hour < 18) return 'Добрый день'
+  if (hour >= 18 && hour < 23) return 'Добрый вечер'
+  return 'Доброй ночи'
+}

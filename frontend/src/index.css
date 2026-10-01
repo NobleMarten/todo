@@ -1000,7 +1000,32 @@ ul { list-style: none; }
   color: var(--muted);
   font-weight: 500;
 }
-.day-progress { margin-top: 10px; }
+.today-header { display: flex; align-items: center; gap: 16px; padding: 6px 0 18px 4px; }
+.today-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.today-title { font-size: 30px; line-height: 1.1; white-space: normal; }
+.today-summary { margin: 0; font-size: 14px; color: var(--muted); }
+.today-summary.all-done { color: var(--ok); }
+.today-ring-num { font-family: var(--mono); font-size: 12.5px; font-weight: 500; color: var(--text); }
+
+.progress-ring { position: relative; flex-shrink: 0; }
+.progress-ring svg { display: block; }
+.progress-ring-track { fill: none; stroke: color-mix(in srgb, var(--text) 8%, transparent); }
+.progress-ring-fill {
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray 600ms cubic-bezier(.2, .7, .2, 1), stroke 300ms ease, opacity 200ms ease;
+}
+.progress-ring.done .progress-ring-fill { stroke: var(--ok); }
+.progress-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.progress-ring.done .progress-ring-center { color: var(--ok); }
+.progress-ring.done .progress-ring-center svg { width: 18px; height: 18px; animation: check-pop 380ms cubic-bezier(.3, 1.6, .5, 1); }
 
 .focus-card {
   display: flex;

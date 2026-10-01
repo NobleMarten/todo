@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Task } from '../api/types'
-import { dateSectionOf, groupTasks, plural, pluralTasks } from './format'
+import { dateSectionOf, daySummary, groupTasks, plural, pluralTasks } from './format'
 
 const TODAY = '2026-09-25'
 
@@ -98,5 +98,15 @@ describe('groupTasks', () => {
     const copy = [...list]
     groupTasks(list, 'date', TODAY)
     expect(list).toEqual(copy)
+  })
+})
+
+describe('daySummary', () => {
+  it('says what is left and what is late', () => {
+    expect(daySummary(0, 0, 0)).toBe('план на сегодня пока пуст')
+    expect(daySummary(0, 0, 2)).toBe('план пуст · 2 просрочены')
+    expect(daySummary(2, 6, 1)).toBe('осталось 4 задачи из 6 · 1 просрочена')
+    expect(daySummary(4, 5, 0)).toBe('осталась 1 задача из 5')
+    expect(daySummary(3, 3, 0)).toBe('всё сделано — 3 задачи')
   })
 })
