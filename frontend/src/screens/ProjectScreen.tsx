@@ -121,8 +121,11 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
             <span className="progress-track">
               <span className="progress-fill" style={{ width: `${(progress.done / progress.total) * 100}%` }} />
             </span>
-            <span className="mono-num muted">
-              {progress.done} / {progress.total} за неделю
+            <span className="week-progress-text">
+              <span className="mono-num">
+                {progress.done} / {progress.total}
+              </span>{' '}
+              за неделю
             </span>
           </div>
         )}
@@ -168,21 +171,24 @@ function ListView({ spec, smartTitle, emptyText }: ViewProps) {
               <div className={`section-label tone-${key}`}>
                 {label} · {list.length}
               </div>
-              {runsOf(list, grouping).map((run, i) => (
-                <TaskRun
-                  // по номеру, а не по первой задаче: ушла первая — отрезок не пересоздаётся и анимирует уход
-                  key={i}
-                  run={run}
-                  today={today}
-                  draggable={draggable}
-                  projectById={spec.view === 'project' ? undefined : projectById}
-                  onToggle={toggleTask}
-                  onSetDue={setDue}
-                  onReorder={reorder}
-                  onDelete={removeTask}
-                  onToday={toToday}
-                />
-              ))}
+              {/* отрезки одной секции — одной карточкой: перетаскивать можно внутри отрезка, выглядят как один список */}
+              <div className="task-runs">
+                {runsOf(list, grouping).map((run, i) => (
+                  <TaskRun
+                    // по номеру, а не по первой задаче: ушла первая — отрезок не пересоздаётся и анимирует уход
+                    key={i}
+                    run={run}
+                    today={today}
+                    draggable={draggable}
+                    projectById={spec.view === 'project' ? undefined : projectById}
+                    onToggle={toggleTask}
+                    onSetDue={setDue}
+                    onReorder={reorder}
+                    onDelete={removeTask}
+                    onToday={toToday}
+                  />
+                ))}
+              </div>
             </section>
           )
         })

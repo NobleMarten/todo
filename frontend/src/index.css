@@ -401,7 +401,10 @@ ul { list-style: none; }
   justify-content: space-around;
   /* как у нативного таб-бара: подписи сразу над полосой home-индикатора, без лишнего зазора */
   padding: 6px 14px max(10px, calc(env(safe-area-inset-bottom) - 6px));
-  background: var(--surface-2);
+  /* полупрозрачный с размытием, как нативный: прокрученное содержимое видно под баром */
+  background: color-mix(in srgb, var(--surface-2) 82%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
   border-top: 1px solid var(--border);
 }
 /* фон бара продолжается за нижний край: если окно всё же короче экрана (старт PWA, резинка), щели не видно */
@@ -421,13 +424,19 @@ ul { list-style: none; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   padding: 4px 10px;
   color: var(--faint);
   transition: color var(--transition);
 }
 .tab.active { color: var(--accent); }
-.tab-label { font-size: 10.5px; }
+.tab-icon { position: relative; display: flex; align-items: center; justify-content: center; width: 54px; height: 30px; }
+.tab-icon svg { position: relative; }
+.tab-pill { position: absolute; inset: 0; border-radius: 15px; background: var(--accent-soft); }
+.tab-label { font-size: 11px; font-weight: 500; }
+.tab.active .tab-label { font-weight: 600; }
+@media (hover: hover) { .tab:not(.active):hover { color: var(--muted); } }
+.tab:active .tab-icon { transform: scale(.92); transition: transform 90ms ease; }
 
 /* ── экран «Списки» (B1) ────────────────────────────────────────────────────── */
 .smart-grid {
@@ -528,6 +537,7 @@ ul { list-style: none; }
 
 /* ── экран списка (B2) ──────────────────────────────────────────────────────── */
 .week-progress { display: flex; align-items: center; gap: 10px; }
+.week-progress-text { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .week-progress .mono-num { font-size: 11px; }
 
 .task-section { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
@@ -1987,6 +1997,28 @@ ul { list-style: none; }
 /* «новый список» — последняя строка группы, без пунктира */
 .rows .new-project { margin: 0; border: 0; border-radius: 0; }
 .rows .new-project:not(.open) { color: var(--accent); }
+
+/* секция списка из нескольких отрезков (по приоритету) — одна карточка, между отрезками тот же разделитель */
+.task-runs {
+  --group-r: calc(var(--radius-card) - 1px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.task-runs > .task-list { background: none; border: 0; border-radius: 0; }
+.task-runs > .task-list:not(:first-of-type) > li:first-child :is(.swipe, .swipe-under, .task) { border-top-left-radius: 0; border-top-right-radius: 0; }
+.task-runs > .task-list:not(:last-of-type) > li:last-child :is(.swipe, .swipe-under, .task) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.task-runs > .task-list + .task-list > li:first-child .task::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 46px;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+  z-index: 1;
+}
 
 /* перетаскиваемая строка приподнимается над карточкой */
 .reorder-item { border-radius: var(--radius-row); }

@@ -1,3 +1,4 @@
+import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { ChartIcon, LinesIcon, TargetIcon, WeekIcon } from './icons'
 
@@ -26,7 +27,17 @@ export function TabBar({ pathname }: { pathname: string }) {
             className={`tab ${active ? 'active' : ''}`}
             aria-current={active ? 'page' : undefined}
           >
-            {t.icon}
+            <span className="tab-icon">
+              {/* подложка активной вкладки переезжает между вкладками (общий layoutId) */}
+              {active && (
+                <motion.span
+                  layoutId="tab-pill"
+                  className="tab-pill"
+                  transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                />
+              )}
+              {t.icon}
+            </span>
             <span className="tab-label">{t.label}</span>
           </Link>
         )
